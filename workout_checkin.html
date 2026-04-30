@@ -427,7 +427,7 @@ function switchTab(name,btn){
 function renderHome(){refreshSelects();renderLog();}
 
 function refreshSelects(){
-  if(!D||!D.members)return;
+  if(!D||!D.members||!D.weeks)return;
   const mOpts=D.members.map(m=>`<option value="${m.id}">${m.nick}（${m.name}）</option>`).join('');
   document.getElementById('m-sel').innerHTML=mOpts;
   document.getElementById('m-joint').innerHTML='<option value="">无</option>'+mOpts;
