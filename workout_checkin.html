@@ -558,26 +558,74 @@ async function callAI(messages, maxTokens=2500){
   return j.choices?.[0]?.message?.content||'';
 }
 
-// 压缩图片到目标宽度，返回base64
-function compressImage(file, targetW=800){
+// 加载图片到canvas
+function loadImage(file){
   return new Promise((resolve,reject)=>{
     const img=new Image();
     const url=URL.createObjectURL(file);
     img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('图片加载失败'));};
     img.onload=()=>{
-      const W=img.width, H=img.height;
-      const scale=Math.min(1, targetW/W);
-      const cW=Math.round(W*scale), cH=Math.round(H*scale);
       const c=document.createElement('canvas');
-      c.width=cW; c.height=cH;
-      c.getContext('2d').drawImage(img,0,0,cW,cH);
+      c.width=img.width; c.height=img.height;
+      c.getContext('2d').drawImage(img,0,0);
       URL.revokeObjectURL(url);
-      const b64=c.toDataURL('image/jpeg',0.88).split(',')[1];
-      progLog(`压缩完成：${W}×${H} → ${cW}×${cH}，约${Math.round(b64.length*0.75/1024)}KB`,'ok');
-      resolve(b64);
+      resolve({canvas:c, w:img.width, h:img.height});
     };
     img.src=url;
   });
+}
+
+// 扫描灰色空白行，找消息边界，返回切割点Y坐标数组
+// 微信群聊背景是灰色(~#EDEDED)，消息之间有一段贯穿全宽的灰色区域
+function findCutPoints(canvas, w, h){
+  // 缩小到200px宽做扫描，速度快
+  const scanW=200, scanH=Math.round(h*(200/w));
+  const sc=document.createElement('canvas');
+  sc.width=scanW; sc.height=scanH;
+  sc.getContext('2d').drawImage(canvas,0,0,w,h,0,0,scanW,scanH);
+  const pixels=sc.getContext('2d').getImageData(0,0,scanW,scanH).data;
+
+  // 判断一行是否为"灰色行"：80%像素满足 R>200 G>200 B>200 且 R≈G≈B（灰色）
+  const isGrayRow=(y)=>{
+    let gray=0;
+    for(let x=0;x<scanW;x++){
+      const i=(y*scanW+x)*4;
+      const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+      const avg=(r+g+b)/3;
+      if(r>185&&g>185&&b>185&&Math.abs(r-avg)<20&&Math.abs(g-avg)<20&&Math.abs(b-avg)<20) gray++;
+    }
+    return gray/scanW>0.75;
+  };
+
+  // 找连续灰色行区间（>=8px），取中点作为切割点
+  const cuts=[0];
+  let grayStart=-1;
+  const MIN_GRAY=8;
+  for(let y=0;y<scanH;y++){
+    if(isGrayRow(y)){
+      if(grayStart<0)grayStart=y;
+    }else{
+      if(grayStart>=0&&y-grayStart>=MIN_GRAY){
+        // 换算回原图坐标
+        const midY=Math.round((grayStart+(y-1))/2*(h/scanH));
+        cuts.push(midY);
+      }
+      grayStart=-1;
+    }
+  }
+  cuts.push(h);
+  return cuts;
+}
+
+// 从canvas裁切一段，压缩到targetW宽，返回base64
+function cropToBase64(canvas, w, y1, y2, targetW=400){
+  const segH=y2-y1;
+  const scale=Math.min(1, targetW/w);
+  const cW=Math.round(w*scale), cH=Math.round(segH*scale);
+  const c=document.createElement('canvas');
+  c.width=cW; c.height=cH;
+  c.getContext('2d').drawImage(canvas,0,y1,w,segH,0,0,cW,cH);
+  return c.toDataURL('image/jpeg',0.82).split(',')[1];
 }
 
 async function recognizeAll(files){
@@ -594,7 +642,7 @@ async function recognizeAll(files){
 
   const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'];
   const names=D.members.map(m=>`${m.nick}（${m.name}）`).join('、');
-  const prompt=`这是一张微信健身打卡群的聊天记录长截图。
+  const makePrompt=(segInfo)=>`这是微信健身打卡群聊天记录截图的第${segInfo}段。
 群成员列表（昵称→姓名）：${names}
 
 请从上到下识别所有打卡消息，返回JSON。规则：
@@ -602,11 +650,11 @@ async function recognizeAll(files){
 2. 同一人连续发的图片+文字说明，属于同一次打卡，合并为一条记录
 3. 运动类型只能从以下选择：${TYPES.join('、')}
 4. 判断类型：步数截图/健康APP/手表步数→散步；跑步路线/配速→跑步；骑行路线→骑行；力量训练→力量训练；出游/观展/聚会/亲子活动→文娱活动；饮食记录→健康饮食
-5. 散步需注意：把图中步数写入note（如"8385步"），管理员判断是否达标
+5. 散步把图中步数写入note（如"8385步"）
 6. 日期：从图片中读取（格式MM-DD），读不到填null
-7. 共同打卡：文字提到"和xxx一起"/"联合xxx"，或图片含两人数据→joint填对方昵称（匹配成员列表）；提到一起但没说是谁→joint填"unknown"
-8. 纯聊天消息（非打卡）忽略不记录
-9. note简短（≤15字），记录关键信息（步数/距离/活动内容）
+7. 共同打卡：文字提到"和xxx一起"/"联合xxx"，或图片含两人数据→joint填对方昵称；提到一起但没说是谁→joint填"unknown"
+8. 纯聊天消息忽略不记录
+9. note简短（≤15字）
 
 仅返回JSON，不要其他文字：
 {"checkins":[{"nick":"昵称","type":"运动类型","date":"MM-DD或null","note":"备注","joint":"对方昵称或unknown或空字符串"}]}`;
@@ -614,31 +662,66 @@ async function recognizeAll(files){
   let allItems=[];
 
   for(let fi=0;fi<files.length;fi++){
-    const label=files.length>1?`第${fi+1}张`:' ';
+    const fileLabel=files.length>1?`第${fi+1}张`:' ';
     try{
-      progTitle(`${label}压缩图片中…`);
-      progLog(`${label}开始处理，原始大小约${Math.round(files[fi].size/1024)}KB`);
-      const b64=await compressImage(files[fi], 800);
+      // 加载图片
+      progTitle(`${fileLabel}加载图片…`);
+      progLog(`${fileLabel}原始大小约${Math.round(files[fi].size/1024)}KB`);
+      const {canvas,w,h}=await loadImage(files[fi]);
+      progLog(`${fileLabel}尺寸 ${w}×${h}px`,'ok');
 
-      progTitle(`${label}AI识别中…`);
-      progLog(`${label}发送给AI识别…`,'warn');
+      // 扫描切割点
+      progTitle(`${fileLabel}扫描消息边界…`);
+      const cuts=findCutPoints(canvas,w,h);
+      progLog(`${fileLabel}找到 ${cuts.length-1} 个切割点，共 ${cuts.length-1} 段`,'ok');
 
-      const raw=await callAI([{role:'user',content:[
-        {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}},
-        {type:'text',text:prompt}
-      ]}], 2500);
-
-      let parsed;
-      try{
-        parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-      }catch(e){
-        throw new Error(`AI返回格式异常：${raw.slice(0,60)}`);
+      // 合并过小的段（小于300px原图高度）
+      const segs=[];
+      for(let i=0;i<cuts.length-1;i++){
+        const y1=cuts[i], y2=cuts[i+1];
+        if(y2-y1<300&&segs.length>0){
+          segs[segs.length-1].y2=y2; // 合并到上一段
+        }else{
+          segs.push({y1,y2,idx:segs.length});
+        }
       }
-      const items=parsed.checkins||[];
-      progLog(`${label}识别完成，找到 ${items.length} 条打卡记录`,'ok');
-      allItems.push(...items);
+      progLog(`${fileLabel}合并后 ${segs.length} 段`,'ok');
+
+      // 并发识别，每批3个
+      const BATCH=3;
+      for(let i=0;i<segs.length;i+=BATCH){
+        const batch=segs.slice(i,i+BATCH);
+        await Promise.all(batch.map(async seg=>{
+          const b64=cropToBase64(canvas,w,seg.y1,seg.y2,400);
+          const kb=Math.round(b64.length*0.75/1024);
+          progLog(`段${seg.idx+1}/${segs.length}（${seg.y1}-${seg.y2}px，${kb}KB）识别中…`,'warn');
+          try{
+            const raw=await callAI([{role:'user',content:[
+              {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}},
+              {type:'text',text:makePrompt(`${seg.idx+1}/${segs.length}`)}
+            ]}],1500);
+            const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+            const items=parsed.checkins||[];
+            progLog(`段${seg.idx+1} 找到 ${items.length} 条`,'ok');
+            seg.items=items;
+          }catch(e){
+            progLog(`段${seg.idx+1} 出错：${e.message.slice(0,60)}`,'err');
+            seg.items=[];
+          }
+        }));
+      }
+
+      // 按顺序合并，去重（同昵称同类型同日期只保留一条）
+      const seen=new Set();
+      segs.sort((a,b)=>a.idx-b.idx).forEach(seg=>{
+        (seg.items||[]).forEach(c=>{
+          const key=`${c.nick}_${c.type}_${c.date}`;
+          if(!seen.has(key)){seen.add(key);allItems.push(c);}
+        });
+      });
+
     }catch(e){
-      progLog(`${label}失败：${e.message.slice(0,80)}`,'err');
+      progLog(`${fileLabel}处理失败：${e.message.slice(0,80)}`,'err');
     }
   }
 
