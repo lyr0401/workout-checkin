@@ -725,7 +725,7 @@ function calcInvest(mid){
 
 // ══ HRDR ══
 function renderHRDRSelects(){
-  if(!D)return;
+  if(!D||!D.weeks)return;
   const sel=document.getElementById('hrdr-week-sel');
   if(sel)sel.innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
 }
