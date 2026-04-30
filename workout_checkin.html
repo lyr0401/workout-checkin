@@ -621,7 +621,7 @@ async function recognizeAll(files){
       const b64=await compressImage(files[fi], 600);
 
       progTitle(`${label}AI识别中…`);
-      progLog(`${label}发送给AI识别…`,'warn');
+      progLog(`${label}发送给AI识别，base64长度：${b64.length}字符…`,'warn');
 
       const raw=await callAI([{role:'user',content:[
         {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}},
