@@ -876,7 +876,15 @@ function delWeek(id){
 }
 
 // ══ 启动 ══
-if(!getToken()){showTokenModal();}else{init().then(()=>{refreshSelects();});}
+if(!getToken()){showTokenModal();}else{
+  // 先用缓存立刻渲染
+  const cached=localStorage.getItem('data_cache');
+  if(cached){
+    try{D=JSON.parse(cached);renderHome();renderMembers();renderHistory();renderHRDRSelects();updateSub();refreshSelects();}catch(e){}
+  }
+  // 后台同步最新数据
+  init().then(()=>{refreshSelects();});
+}
 </script>
 </body>
 </html>
