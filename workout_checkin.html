@@ -427,7 +427,7 @@ function switchTab(name,btn){
 function renderHome(){refreshSelects();renderLog();}
 
 function refreshSelects(){
-  if(!D||!D.members||!D.weeks)return;
+  if(!D||!D.members||!D.weeks||!D.checkins)return;
   const mOpts=D.members.map(m=>`<option value="${m.id}">${m.nick}（${m.name}）</option>`).join('');
   document.getElementById('m-sel').innerHTML=mOpts;
   document.getElementById('m-joint').innerHTML='<option value="">无</option>'+mOpts;
@@ -439,7 +439,7 @@ function refreshSelects(){
 }
 
 function renderLog(){
-  if(!D)return;
+  if(!D||!D.checkins||!D.members)return;
   const area=document.getElementById('log-area');
   const logs=D.checkins.filter(c=>c.wid===D.currentWid).sort((a,b)=>b.date.localeCompare(a.date));
   if(!logs.length){area.innerHTML='<div class="empty">暂无记录</div>';return;}
@@ -731,7 +731,7 @@ function renderHRDRSelects(){
 }
 
 function renderHRDR(){
-  if(!D)return;
+  if(!D||!D.members||!D.weeks||!D.checkins)return;
   const wid=document.getElementById('hrdr-week-sel')?.value||D.currentWid;
   const wk=gw(wid);if(!wk)return;
   const bg=document.getElementById('hrdr-bg');
@@ -777,7 +777,7 @@ function renderHRDR(){
 
 // ══ 成员管理 ══
 function renderMembers(){
-  if(!D)return;
+  if(!D||!D.members)return;
   document.getElementById('pgrid').innerHTML=D.members.map(m=>`
     <div class="pcard">
       <div class="ptop">
@@ -813,7 +813,7 @@ function delMember(id){
 
 // ══ 历史记录 ══
 function renderHistory(){
-  if(!D)return;
+  if(!D||!D.weeks||!D.checkins)return;
   const el=document.getElementById('wk-list');
   if(!D.weeks.length){el.innerHTML='<div class="empty">暂无周次</div>';return;}
   el.innerHTML=[...D.weeks].reverse().map(w=>{
