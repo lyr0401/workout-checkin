@@ -1,1 +1,336 @@
-{"members":[{"id":"m1","nick":"小偶尔","name":"王晶晶","prefs":["散步"],"diBase":0},{"id":"m2","nick":"Anna","name":"Anna","prefs":["散步","骑行"],"diBase":0},{"id":"m3","nick":"dahe🌻","name":"杨大赫","prefs":["骑行","跑步"],"diBase":0},{"id":"m4","nick":"Batijiang","name":"蒋万鹏","prefs":["散步"],"diBase":0},{"id":"m5","nick":"静小骨","name":"谷静","prefs":["散步"],"diBase":0},{"id":"m6","nick":"Iris","name":"Iris","prefs":["跑步","散步"],"diBase":0},{"id":"m7","nick":"HelloBani","name":"李燕","prefs":["散步"],"diBase":0},{"id":"m8","nick":"艾熙Icy","name":"艾熙","prefs":["力量训练"],"diBase":0},{"id":"m9","nick":"维佳","name":"安维佳","prefs":["散步"],"diBase":0},{"id":"m10","nick":"小李","name":"李淼","prefs":["散步"],"diBase":0},{"id":"m11","nick":"戴波","name":"戴波","prefs":["散步"],"diBase":0},{"id":"m12","nick":"Joice","name":"Joice","prefs":["散步"],"diBase":0},{"id":"m13","nick":"Caroline","name":"Caroline","prefs":["散步"],"diBase":0},{"id":"m14","nick":"王晞","name":"王晞","prefs":["散步"],"diBase":0},{"id":"m15","nick":"nancy","name":"Nancy","prefs":["散步"],"diBase":0},{"id":"m16","nick":"Stella","name":"Stella","prefs":["散步"],"diBase":0},{"id":"m17","nick":"流水斋","name":"Jason","prefs":["散步"],"diBase":0},{"id":"m18","nick":"Vincent","name":"胡新奇","prefs":["散步"],"diBase":0}],"weeks":[{"id":"w1","name":"第17周","yearNum":17,"qNum":3,"q":2,"start":"2026-04-20","end":"2026-04-26"}],"checkins":[],"currentWid":"w1"}
+{
+  "members": [
+    {
+      "id": "m1",
+      "nick": "小偶尔",
+      "name": "王晶晶",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m2",
+      "nick": "Anna",
+      "name": "Anna",
+      "prefs": [
+        "散步",
+        "骑行"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m3",
+      "nick": "dahe🌻",
+      "name": "杨大赫",
+      "prefs": [
+        "骑行",
+        "跑步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m4",
+      "nick": "Batijiang",
+      "name": "蒋万鹏",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m5",
+      "nick": "静小骨",
+      "name": "谷静",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m6",
+      "nick": "Iris",
+      "name": "Iris",
+      "prefs": [
+        "跑步",
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m7",
+      "nick": "HelloBani",
+      "name": "李燕",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m8",
+      "nick": "艾熙Icy",
+      "name": "艾熙",
+      "prefs": [
+        "力量训练"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m9",
+      "nick": "维佳",
+      "name": "安维佳",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m10",
+      "nick": "小李",
+      "name": "李淼",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m11",
+      "nick": "戴波",
+      "name": "戴波",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m12",
+      "nick": "Joice",
+      "name": "Joice",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m13",
+      "nick": "Caroline",
+      "name": "Caroline",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m14",
+      "nick": "王晞",
+      "name": "王晞",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m15",
+      "nick": "nancy",
+      "name": "Nancy",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m16",
+      "nick": "Stella",
+      "name": "Stella",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m17",
+      "nick": "流水斋",
+      "name": "Jason",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    },
+    {
+      "id": "m18",
+      "nick": "Vincent",
+      "name": "胡新奇",
+      "prefs": [
+        "散步"
+      ],
+      "diBase": 0
+    }
+  ],
+  "weeks": [
+    {
+      "id": "w1",
+      "name": "第17周",
+      "yearNum": 17,
+      "qNum": 3,
+      "q": 2,
+      "start": "2026-04-20",
+      "end": "2026-04-26"
+    }
+  ],
+  "checkins": [
+    {
+      "id": "id1777544663231j91r",
+      "mid": "m10",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "骑行",
+      "note": "",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231tdu6",
+      "mid": "m4",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "12362步",
+      "joint": null
+    },
+    {
+      "id": "id17775446632316slu",
+      "mid": "m2",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "20030步",
+      "joint": null
+    },
+    {
+      "id": "id17775446632317kxu",
+      "mid": "m3",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "骑行",
+      "note": "4.16km",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231jc9x",
+      "mid": "m1",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "8226步",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231r0da",
+      "mid": "m7",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231ks43",
+      "mid": "m7",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "8633步",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231dpbw",
+      "mid": "m3",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "跑步",
+      "note": "10.35公里",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231pe5t",
+      "mid": "m6",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "骑行",
+      "note": "4.37公里",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231ebxq",
+      "mid": "m2",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "文娱活动",
+      "note": "中年群合影",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231998e",
+      "mid": "m1",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "11924步",
+      "joint": null
+    },
+    {
+      "id": "id177754466323189cf",
+      "mid": "m7",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "10504步",
+      "joint": null
+    },
+    {
+      "id": "id17775446632315m7u",
+      "mid": "m8",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "力量训练",
+      "note": "1:00:11",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231ohcl",
+      "mid": "m4",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "13797步",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231hp3g",
+      "mid": "m6",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "跑步",
+      "note": "5.68公里",
+      "joint": null
+    },
+    {
+      "id": "id17775446632311ily",
+      "mid": "m6",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "14488步",
+      "joint": null
+    },
+    {
+      "id": "id1777544663231ofie",
+      "mid": "m3",
+      "wid": "w1",
+      "date": "2026-04-30",
+      "type": "散步",
+      "note": "",
+      "joint": null
+    }
+  ],
+  "currentWid": "w1"
+}
