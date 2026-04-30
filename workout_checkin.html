@@ -577,14 +577,14 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
   const akey=getAKey();
   if(!akey){updateProgRow(`${fileIdx}-${seg.idx}`,'err','未配置API Key');return{idx:seg.idx,fileIdx,items:[]};}
   try{
-    const resp=await fetch('https://api.gptsapi.net/v1/messages',{
+    const resp=await fetch('https://api.gptsapi.net/v1/chat/completions',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':akey,'anthropic-version':'2023-06-01'},
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${akey}`},
       body:JSON.stringify({
         model:'claude-sonnet-4-6',
         max_tokens:1500,
         messages:[{role:'user',content:[
-          {type:'image',source:{type:'base64',media_type:'image/jpeg',data:seg.b64}},
+          {type:'image_url',image_url:{url:`data:image/jpeg;base64,${seg.b64}`}},
           {type:'text',text:`这是微信群聊天记录截图的一段。群里打卡成员有：${names}。
 运动类型只能从以下选择：${TYPES.join('、')}。
 规则：
@@ -593,12 +593,12 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
 3. 图片里有两个人数据或文字提到邀请谁，joint填对方昵称；提到共同打卡但没说是谁，joint填"unknown"
 4. 步数/健康APP步数/手表步数→散步；跑步配速/跑步路线→跑步；骑行路线→骑行
 5. 保持识别顺序和截图从上到下一致
-6. 仅返回JSON：{"checkins":[{"nick":"昵称","type":"运动类型","note":"简短备注","joint":"对方昵称或unknown或空"}]}`
-        }]}]
+6. 仅返回JSON：{"checkins":[{"nick":"昵称","type":"运动类型","note":"简短备注","joint":"对方昵称或unknown或空"}]}`}
+        ]}]
       })
     });
     const json=await resp.json();
-    const raw=(json.content||[]).map(b=>b.text||'').join('');
+    const raw=json.choices?.[0]?.message?.content||'';
     const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
     const found=parsed.checkins||[];
     updateProgRow(`${fileIdx}-${seg.idx}`,'done',`找到 ${found.length} 条`);
