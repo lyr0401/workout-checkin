@@ -763,7 +763,7 @@ function renderHRDR(){
   ranked.forEach(({m,weekDi,q2Di,yearDi,inv},i)=>{
     const top=tableTop+i*rowH;
     const crown=i===0?'👑 ':'';
-    const diCell=(n)=>n>0?`<div style="display:flex;align-items:center;justify-content:center;gap:2px;">${diSVG}<span>×${n}</span></div>`:'';
+    const diCell=(n)=>n>0?`<span style="font-size:${dfs}px;color:#3a2000;font-weight:500;">×${n}</span>`:'';
 
     html+=`<div style="position:absolute;top:${top}%;left:${nameL}%;width:${nameW}%;text-align:center;font-size:${fs}px;color:#3a2000;font-weight:${i===0?700:500};">${crown}${m.name}</div>`;
     if(weekDi>0) html+=`<div style="position:absolute;top:${top}%;left:${c1L}%;width:${cW}%;font-size:${dfs}px;color:#3a2000;">${diCell(weekDi)}</div>`;
