@@ -575,44 +575,11 @@ function loadImage(file){
   });
 }
 
-// 扫描灰色空白行，找消息边界，返回切割点Y坐标数组
-// 微信群聊背景是灰色(~#EDEDED)，消息之间有一段贯穿全宽的灰色区域
+// 硬切5段
 function findCutPoints(canvas, w, h){
-  // 缩小到200px宽做扫描，速度快
-  const scanW=200, scanH=Math.round(h*(200/w));
-  const sc=document.createElement('canvas');
-  sc.width=scanW; sc.height=scanH;
-  sc.getContext('2d').drawImage(canvas,0,0,w,h,0,0,scanW,scanH);
-  const pixels=sc.getContext('2d').getImageData(0,0,scanW,scanH).data;
-
-  // 判断一行是否为"灰色行"：80%像素满足 R>200 G>200 B>200 且 R≈G≈B（灰色）
-  const isGrayRow=(y)=>{
-    let gray=0;
-    for(let x=0;x<scanW;x++){
-      const i=(y*scanW+x)*4;
-      const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
-      const avg=(r+g+b)/3;
-      if(r>185&&g>185&&b>185&&Math.abs(r-avg)<20&&Math.abs(g-avg)<20&&Math.abs(b-avg)<20) gray++;
-    }
-    return gray/scanW>0.75;
-  };
-
-  // 找连续灰色行区间（>=8px），取中点作为切割点
+  const N=5;
   const cuts=[0];
-  let grayStart=-1;
-  const MIN_GRAY=8;
-  for(let y=0;y<scanH;y++){
-    if(isGrayRow(y)){
-      if(grayStart<0)grayStart=y;
-    }else{
-      if(grayStart>=0&&y-grayStart>=MIN_GRAY){
-        // 换算回原图坐标
-        const midY=Math.round((grayStart+(y-1))/2*(h/scanH));
-        cuts.push(midY);
-      }
-      grayStart=-1;
-    }
-  }
+  for(let i=1;i<N;i++) cuts.push(Math.round(h*i/N));
   cuts.push(h);
   return cuts;
 }
