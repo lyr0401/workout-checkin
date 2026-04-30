@@ -875,7 +875,7 @@ function delWeek(id){
 }
 
 // ══ 启动 ══
-if(!getToken()){showTokenModal();}else{init();}
+if(!getToken()){showTokenModal();}else{init().then(()=>{refreshSelects();});}
 </script>
 </body>
 </html>
