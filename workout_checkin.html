@@ -572,7 +572,7 @@ function compressImage(file, targetW=800){
       c.width=cW; c.height=cH;
       c.getContext('2d').drawImage(img,0,0,cW,cH);
       URL.revokeObjectURL(url);
-      const b64=c.toDataURL('image/jpeg',0.88).split(',')[1];
+      const b64=c.toDataURL('image/jpeg',0.75).split(',')[1];
       progLog(`压缩完成：${W}×${H} → ${cW}×${cH}，约${Math.round(b64.length*0.75/1024)}KB`,'ok');
       resolve(b64);
     };
@@ -618,7 +618,7 @@ async function recognizeAll(files){
     try{
       progTitle(`${label}压缩图片中…`);
       progLog(`${label}开始处理，原始大小约${Math.round(files[fi].size/1024)}KB`);
-      const b64=await compressImage(files[fi], 800);
+      const b64=await compressImage(files[fi], 600);
 
       progTitle(`${label}AI识别中…`);
       progLog(`${label}发送给AI识别…`,'warn');
