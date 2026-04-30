@@ -575,7 +575,7 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
   const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'];
   updateProgRow(`${fileIdx}-${seg.idx}`,'proc','');
   const akey=getAKey();
-  if(!akey){updateProgRow(`${fileIdx}-${seg.idx}`,'err','未配置API Key');return{idx:seg.idx,fileIdx,items:[]};}
+  if(!akey){updateProgRow(`${fileIdx}-${seg.idx}`,'err','未配置 API Key');return{idx:seg.idx,fileIdx,items:[]};}
   try{
     const resp=await fetch('https://api.gptsapi.net/v1/chat/completions',{
       method:'POST',
@@ -597,14 +597,23 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
         ]}]
       })
     });
+    if(!resp.ok){
+      const errJson=await resp.json().catch(()=>null);
+      const reason=errJson?.error?.message||errJson?.message||resp.status;
+      throw new Error(`接口返回错误：${reason}`);
+    }
     const json=await resp.json();
     const raw=json.choices?.[0]?.message?.content||'';
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+    let parsed;
+    try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}
+    catch(e){throw new Error(`AI返回格式异常，无法解析（${raw.slice(0,40)}）`);}
+    if(!parsed.checkins){throw new Error('AI返回内容缺少checkins字段');}
     const found=parsed.checkins||[];
     updateProgRow(`${fileIdx}-${seg.idx}`,'done',`找到 ${found.length} 条`);
     return{idx:seg.idx,fileIdx,items:found};
   }catch(e){
-    updateProgRow(`${fileIdx}-${seg.idx}`,'err',e.message.slice(0,30));
+    const msg=e.message.slice(0,60);
+    updateProgRow(`${fileIdx}-${seg.idx}`,'err',msg);
     return{idx:seg.idx,fileIdx,items:[]};
   }
 }
@@ -638,8 +647,13 @@ async function recognizeAll(files){
         </div>`;
       });
     }catch(e){
-      toast(e.message);
+      toast('图片读取失败：'+e.message);
     }
+  }
+
+  if(!allSegs.length){
+    progTitle.textContent='没有可识别的图片，请重新上传';
+    return;
   }
 
   progTitle.textContent=`共切成 ${allSegs.length} 段，并行识别中…`;
@@ -659,17 +673,18 @@ async function recognizeAll(files){
   const merged=[];
   results.forEach(r=>{
     r.items.forEach(c=>{
-      // 去重：相邻段重叠区域同一昵称同类型只保留一次
+      // 去重：同一张图相邻段重叠区域，同昵称同类型只保留一次
       const last=merged[merged.length-1];
-      if(last&&last.nick===c.nick&&last.type===c.type&&r.idx>0&&
-        results.find(x=>x.idx===r.idx-1)?.items.some(x=>x.nick===c.nick&&x.type===c.type)) return;
+      const prevSeg=results.find(x=>x.fileIdx===r.fileIdx&&x.idx===r.idx-1);
+      if(last&&last.nick===c.nick&&last.type===c.type&&r.idx>0&&prevSeg?.items.some(x=>x.nick===c.nick&&x.type===c.type)) return;
       merged.push(c);
     });
   });
 
   aiItems=merged;
   const total=aiItems.length;
-  progTitle.textContent=`识别完成`;
+  const errCount=results.filter(r=>r.items.length===0).length;
+  progTitle.textContent='识别完成'+(errCount>0?`（${errCount} 段出错，请查看红色行）`:'');
   progSummary.style.display='block';
   progSummary.textContent=`共识别 ${total} 条打卡记录，来自 ${files.length} 张截图 ${allSegs.length} 段。请对照截图核对后录入。`;
 
