@@ -400,7 +400,7 @@ async function init(){
     if(e.message!=='未配置Token'){toast('加载失败，使用本地数据：'+e.message);D=defaultData();}
     else return;
   }
-  renderHome();renderMembers();renderHistory();renderHRDRSelects();updateSub();
+  renderHome();renderMembers();renderHistory();renderHRDRSelects();updateSub();refreshSelects();localStorage.setItem('data_cache',JSON.stringify(D));
 }
 
 function uid(){return 'id'+Date.now()+Math.random().toString(36).slice(2,6);}
