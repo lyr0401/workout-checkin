@@ -587,28 +587,6 @@ function findCutPoints(canvas, w, h){
   cuts.push(h);
   return cuts;
 }
-    return gray/scanW>0.75;
-  };
-
-  // 找连续灰色行区间（>=8px），取中点作为切割点
-  const cuts=[0];
-  let grayStart=-1;
-  const MIN_GRAY=8;
-  for(let y=0;y<scanH;y++){
-    if(isGrayRow(y)){
-      if(grayStart<0)grayStart=y;
-    }else{
-      if(grayStart>=0&&y-grayStart>=MIN_GRAY){
-        // 换算回原图坐标
-        const midY=Math.round((grayStart+(y-1))/2*(h/scanH));
-        cuts.push(midY);
-      }
-      grayStart=-1;
-    }
-  }
-  cuts.push(h);
-  return cuts;
-}
 
 // 从canvas裁切一段，压缩到targetW宽，返回base64
 function cropToBase64(canvas, w, y1, y2, targetW=400){
