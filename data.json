@@ -166,7 +166,17 @@
       "diBase": 0
     }
   ],
-  "weeks": [],
+  "weeks": [
+    {
+      "id": "w1",
+      "name": "第17周",
+      "yearNum": 17,
+      "qNum": 3,
+      "q": 2,
+      "start": "2026-04-20",
+      "end": "2026-04-26"
+    }
+  ],
   "checkins": [],
-  "currentWid": ""
+  "currentWid": "w1"
 }
