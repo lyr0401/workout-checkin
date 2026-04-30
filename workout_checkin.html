@@ -618,7 +618,7 @@ async function recognizeAll(files){
     try{
       progTitle(`${label}压缩图片中…`);
       progLog(`${label}开始处理，原始大小约${Math.round(files[fi].size/1024)}KB`);
-      const b64=await compressImage(files[fi], 600);
+      const b64=await compressImage(files[fi], 200);
 
       progTitle(`${label}AI识别中…`);
       progLog(`${label}发送给AI识别，base64长度：${b64.length}字符…`,'warn');
