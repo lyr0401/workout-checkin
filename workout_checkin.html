@@ -262,12 +262,16 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:#fafaf7;}
 <!-- Token 弹窗 -->
 <div class="token-modal" id="token-modal">
   <div style="background:#fff;border-radius:16px;padding:28px 32px;max-width:440px;width:90%;">
-    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">配置 GitHub Token</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px;">配置 Token</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px;line-height:1.7;">
-      请输入 GitHub Token 以连接数据存储。<br>Token 保存在本设备浏览器，只需填写一次。
+      Token 保存在本设备浏览器，只需填写一次。
     </div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">GitHub Token</div>
     <input type="password" id="token-input" placeholder="粘贴 Token（ghp_ 开头）"
+      style="width:100%;margin-bottom:14px;font-size:13px;font-family:monospace;">
+
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Anthropic API Key（截图识别用）</div>
+    <input type="password" id="akey-input" placeholder="粘贴 API Key（sk- 开头）"
       style="width:100%;margin-bottom:16px;font-size:13px;font-family:monospace;">
     <button class="btn btn-p" onclick="saveToken()" style="width:100%;">确认，开始使用</button>
   </div>
@@ -309,17 +313,33 @@ let fileSha=null;
 function getToken(){return localStorage.getItem('gh_token')||'';}
 function getAPI(){return `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`;}
 
-function showTokenModal(){document.getElementById('token-modal').classList.add('open');}
+function getAKey(){return localStorage.getItem('anthropic_key')||'';}
+
+function showTokenModal(){
+  document.getElementById('token-modal').classList.add('open');
+  const t=getToken(),ak=getAKey();
+  if(t)document.getElementById('token-input').value=t;
+  if(ak)document.getElementById('akey-input').value=ak;
+}
 function saveToken(){
   const t=document.getElementById('token-input').value.trim();
-  if(!t){alert('请输入Token');return;}
+  const ak=document.getElementById('akey-input').value.trim();
+  if(!t){alert('请输入 GitHub Token');return;}
+  if(!ak){alert('请输入 Anthropic API Key');return;}
+  const tokenChanged=t!==getToken();
   localStorage.setItem('gh_token',t);
+  localStorage.setItem('anthropic_key',ak);
+  if(tokenChanged){localStorage.removeItem('data_cache');fileSha=null;}
   document.getElementById('token-modal').classList.remove('open');
-  toast('Token已保存，加载数据中…');
+  toast('配置已保存，加载数据中…');
   init();
 }
 
-async function ghLoad(){const cached=localStorage.getItem("data_cache");if(cached){setTimeout(async()=>{try{const fresh=await ghLoadRaw();localStorage.setItem("data_cache",JSON.stringify(fresh));D=fresh;renderHome();renderMembers();renderHistory();renderHRDRSelects();updateSub();refreshSelects();}catch(e){}},100);return JSON.parse(cached);}return await ghLoadRaw();}
+async function ghLoad(){
+  const cached=localStorage.getItem("data_cache");
+  if(cached) return JSON.parse(cached);
+  return await ghLoadRaw();
+}
 async function ghLoadRaw(){
   if(!getToken()){showTokenModal();throw new Error('未配置Token');}
   const r=await fetch(getAPI(),{headers:{'Authorization':`token ${getToken()}`,'Accept':'application/vnd.github.v3+json'}});
@@ -331,6 +351,10 @@ async function ghLoadRaw(){
 async function ghSave(data){
   if(!getToken())return;
   sind('saving');
+  // fileSha为null时（首次用缓存启动），先拉一次sha再保存
+  if(!fileSha){
+    try{await ghLoadRaw();}catch(e){sind('err');return;}
+  }
   const content=btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2))));
   const r=await fetch(getAPI(),{method:'PUT',
     headers:{'Authorization':`token ${getToken()}`,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
@@ -368,7 +392,7 @@ function defaultData(){return{
     {id:'m17',nick:'流水斋', name:'Jason', prefs:['散步'],    diBase:0},
     {id:'m18',nick:'Vincent',name:'胡新奇',prefs:['散步'],    diBase:0},
   ],
-  weeks:[{id:'w1',name:'第17周',yearNum:16,qNum:3,q:2,start:'2026-04-20',end:'2026-04-26'}],
+  weeks:[{id:'w1',name:'第17周',yearNum:17,qNum:3,q:2,start:'2026-04-20',end:'2026-04-26'}],
   checkins:[
     {id:'c1', mid:'m10',wid:'w1',date:'2026-04-20',type:'骑行',note:'共享单车',joint:null},
     {id:'c2', mid:'m4', wid:'w1',date:'2026-04-20',type:'散步',note:'12362步',joint:null},
@@ -405,7 +429,7 @@ async function init(){
 
 function uid(){return 'id'+Date.now()+Math.random().toString(36).slice(2,6);}
 function gm(id){return D.members.find(m=>m.id===id);}
-function gw(id){return D.weeks.find(w=>w.id===id);}
+function gw(id){return D?.weeks?.find(w=>w.id===id);}
 function fd(s){if(!s)return'';const d=new Date(s);return`${d.getMonth()+1}/${d.getDate()}`;}
 function av(m,sz=30){return`<div class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz*.4)}px;">${(m?.name||m?.nick||'?').slice(0,1)}</div>`;}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
@@ -443,7 +467,6 @@ function renderLog(){
   const area=document.getElementById('log-area');
   const logs=D.checkins.filter(c=>c.wid===D.currentWid).sort((a,b)=>b.date.localeCompare(a.date));
   if(!logs.length){area.innerHTML='<div class="empty">暂无记录</div>';return;}
-  const mOpts=D.members.map(m=>`<option value="${m.id}">${m.nick}（${m.name}）</option>`).join('');
   area.innerHTML='<div class="log-list">'+logs.map(c=>{
     const m=gm(c.mid),j=c.joint?gm(c.joint):null;
     return`<div class="log-item">
@@ -475,7 +498,7 @@ function manualAdd(){
 function delCheckin(id){
   if(!confirm('确认删除？'))return;
   D.checkins=D.checkins.filter(c=>c.id!==id);
-  ghSave(D);renderHome();toast('已删除');
+  ghSave(D);renderHome();renderHistory();toast('已删除');
 }
 
 // ══ 编辑弹窗 ══
@@ -500,20 +523,20 @@ function saveEdit(){
   c.type=document.getElementById('edit-type').value;
   c.joint=document.getElementById('edit-joint').value||null;
   c.note=document.getElementById('edit-note').value.trim();
-  ghSave(D);closeEditModal();renderHome();toast('已保存');
+  ghSave(D);closeEditModal();renderHome();renderHistory();toast('已保存');
 }
 
 // ══ AI 识别（并行+进度）══
 let aiItems=[];
-let segStates=[];
 
 function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag');onFiles(e.dataTransfer.files);}
 function onFiles(files){if(!files||!files.length)return;recognizeAll(Array.from(files));}
 
 async function sliceImage(file){
-  return new Promise(resolve=>{
+  return new Promise((resolve,reject)=>{
     const img=new Image();
     const url=URL.createObjectURL(file);
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('图片加载失败：'+file.name));};
     img.onload=()=>{
       const W=img.width,H=img.height;
       const TARGET_W=800,SEG_H=1500,OVERLAP=80;
@@ -551,12 +574,14 @@ function updateProgRow(idx,status,msg){
 async function recognizeSegment(seg,names,fileIdx,totalSegs){
   const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'];
   updateProgRow(`${fileIdx}-${seg.idx}`,'proc','');
+  const akey=getAKey();
+  if(!akey){updateProgRow(`${fileIdx}-${seg.idx}`,'err','未配置API Key');return{idx:seg.idx,fileIdx,items:[]};}
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('https://api.gptsapi.net/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','x-api-key':akey,'anthropic-version':'2023-06-01'},
       body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-6',
         max_tokens:1500,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:'image/jpeg',data:seg.b64}},
@@ -585,6 +610,7 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
 }
 
 async function recognizeAll(files){
+  if(!D||!D.members){toast('数据未加载，请稍后再试');return;}
   const progBox=document.getElementById('prog-box');
   const progList=document.getElementById('prog-list');
   const progTitle=document.getElementById('prog-title');
@@ -598,19 +624,22 @@ async function recognizeAll(files){
 
   const names=D.members.map(m=>`${m.nick}（${m.name}）`).join('、');
 
-  // 切所有图
   progTitle.textContent='正在切图…';
   progList.innerHTML='';
   let allSegs=[];
   for(let fi=0;fi<files.length;fi++){
-    const segs=await sliceImage(files[fi]);
-    segs.forEach(s=>{
-      allSegs.push({...s,fileIdx:fi});
-      progList.innerHTML+=`<div class="prog-row" id="prog-row-${fi}-${s.idx}">
-        <span class="prog-badge wait">等待中</span>
-        <span class="prog-info" style="color:var(--muted);font-size:12px;">第${fi+1}张截图 第${s.idx+1}段（第${s.yStart}~${s.yEnd}行）</span>
-      </div>`;
-    });
+    try{
+      const segs=await sliceImage(files[fi]);
+      segs.forEach(s=>{
+        allSegs.push({...s,fileIdx:fi});
+        progList.innerHTML+=`<div class="prog-row" id="prog-row-${fi}-${s.idx}">
+          <span class="prog-badge wait">等待中</span>
+          <span class="prog-info" style="color:var(--muted);font-size:12px;">第${fi+1}张截图 第${s.idx+1}段（第${s.yStart}~${s.yEnd}行）</span>
+        </div>`;
+      });
+    }catch(e){
+      toast(e.message);
+    }
   }
 
   progTitle.textContent=`共切成 ${allSegs.length} 段，并行识别中…`;
@@ -622,7 +651,6 @@ async function recognizeAll(files){
     const batch=allSegs.slice(i,i+BATCH);
     const batchResults=await Promise.all(batch.map(s=>recognizeSegment(s,names,s.fileIdx,allSegs.length)));
     results.push(...batchResults);
-    const done=results.filter(r=>r.items!==undefined).length;
     progTitle.textContent=`已完成 ${Math.min(i+BATCH,allSegs.length)} / ${allSegs.length} 段…`;
   }
 
@@ -649,6 +677,7 @@ async function recognizeAll(files){
 }
 
 function renderAIList(){
+  if(!D||!D.members||!D.weeks)return;
   const wrap=document.getElementById('ai-result-wrap');
   const list=document.getElementById('ai-list');
   document.getElementById('ai-week-sel').innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
@@ -718,6 +747,7 @@ function calcQ2Di(mid){
 }
 function calcYearDi(mid){return(gm(mid)?.diBase||0)+D.checkins.filter(c=>c.mid===mid).length;}
 function calcInvest(mid){
+  // 分子：Q2中有打卡记录的周数；分母：Q2已创建的周次数量（到当前为止）
   const q2wks=D.weeks.filter(w=>w.q===2);
   const done=q2wks.filter(w=>D.checkins.some(c=>c.mid===mid&&c.wid===w.id)).length;
   return{done,total:q2wks.length};
@@ -739,7 +769,7 @@ function renderHRDR(){
   if(!bg||!bg.complete||bg.naturalWidth===0)return;
   const W=bg.offsetWidth;
 
-  // 排序：Q2总Di币降序
+  // 排序：Q2总Di币降序，同分再按全年降序
   const ranked=[...D.members].map(m=>({
     m,
     weekDi:calcWeekDi(m.id,wid),
@@ -750,7 +780,7 @@ function renderHRDR(){
 
   const diSVG=`<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle;margin-right:1px;flex-shrink:0;"><circle cx="8" cy="8" r="7.5" fill="#f5c040" stroke="#c8900a" stroke-width="0.5"/><text x="8" y="11.5" text-anchor="middle" font-size="7" font-weight="bold" fill="#7a4a00" font-family="sans-serif">Di</text></svg>`;
 
-  // 周信息定位（经测量原图比例）
+  // 定位参数（基于背景图实测比例）
   const timeTop=15.2,timeLeft=18,timeW=64;
   const tableTop=27.2,rowH=4.28;
   const nameL=7,nameW=16;
@@ -760,16 +790,23 @@ function renderHRDR(){
   const wkStr=`储蓄时间：${wk.start.slice(5).replace('-','.')}－${wk.end.slice(5).replace('-','.')}，全年第${wk.yearNum}周，Q${wk.q||2}第${wk.qNum}周`;
   let html=`<div style="position:absolute;top:${timeTop}%;left:${timeLeft}%;width:${timeW}%;text-align:center;font-size:${fs}px;color:#5a3a00;font-weight:500;white-space:nowrap;">${wkStr}</div>`;
 
+  // Di币单元格：带图标
+  const diCell=(n)=>n>0?`<span style="display:inline-flex;align-items:center;font-size:${dfs}px;color:#3a2000;font-weight:500;">${diSVG}×${n}</span>`:'';
+  // 定投单元格：N/M，0/M也显示
+  const investCell=(done,total)=>total>0?`<span style="font-size:${fs}px;color:#3a2000;">${done}/${total}</span>`:'';
+
   ranked.forEach(({m,weekDi,q2Di,yearDi,inv},i)=>{
     const top=tableTop+i*rowH;
     const crown=i===0?'👑 ':'';
-    const diCell=(n)=>n>0?`<span style="font-size:${dfs}px;color:#3a2000;font-weight:500;">×${n}</span>`:'';
-
+    // 列1：本周储蓄额（Di×N，0则空白）
+    // 列2：Q2定投周数（done/total，total=0则空白）
+    // 列3：Q2健康Di币总额（Di×N，0则空白）
+    // 列4：全年健康Di币总额（Di×N，0则空白）
     html+=`<div style="position:absolute;top:${top}%;left:${nameL}%;width:${nameW}%;text-align:center;font-size:${fs}px;color:#3a2000;font-weight:${i===0?700:500};">${crown}${m.name}</div>`;
-    if(weekDi>0) html+=`<div style="position:absolute;top:${top}%;left:${c1L}%;width:${cW}%;font-size:${dfs}px;color:#3a2000;">${diCell(weekDi)}</div>`;
-    if(inv.total>0) html+=`<div style="position:absolute;top:${top}%;left:${c2L}%;width:${cW}%;text-align:center;font-size:${fs}px;color:#3a2000;">${inv.done}/${inv.total}</div>`;
-    if(q2Di>0) html+=`<div style="position:absolute;top:${top}%;left:${c3L}%;width:${cW}%;font-size:${dfs}px;color:#3a2000;">${diCell(q2Di)}</div>`;
-    if(yearDi>0) html+=`<div style="position:absolute;top:${top}%;left:${c4L}%;width:${cW}%;font-size:${dfs}px;color:#3a2000;">${diCell(yearDi)}</div>`;
+    if(weekDi>0) html+=`<div style="position:absolute;top:${top}%;left:${c1L}%;width:${cW}%;display:flex;align-items:center;">${diCell(weekDi)}</div>`;
+    if(inv.total>0) html+=`<div style="position:absolute;top:${top}%;left:${c2L}%;width:${cW}%;text-align:center;">${investCell(inv.done,inv.total)}</div>`;
+    if(q2Di>0) html+=`<div style="position:absolute;top:${top}%;left:${c3L}%;width:${cW}%;display:flex;align-items:center;">${diCell(q2Di)}</div>`;
+    if(yearDi>0) html+=`<div style="position:absolute;top:${top}%;left:${c4L}%;width:${cW}%;display:flex;align-items:center;">${diCell(yearDi)}</div>`;
   });
 
   overlay.innerHTML=html;
@@ -807,8 +844,12 @@ function addMember(){
 }
 function updateDiBase(id,val){const m=gm(id);if(m){m.diBase=parseInt(val)||0;ghSave(D);}}
 function delMember(id){
-  if(!confirm('确认移除？'))return;
-  D.members=D.members.filter(m=>m.id!==id);ghSave(D);renderMembers();toast('已移除');
+  if(!confirm('确认移除？该成员的所有打卡记录也会一并删除。'))return;
+  D.members=D.members.filter(m=>m.id!==id);
+  D.checkins=D.checkins.filter(c=>c.mid!==id);
+  // 清理其他记录中引用了该成员的 joint 字段
+  D.checkins.forEach(c=>{if(c.joint===id)c.joint=null;});
+  ghSave(D);renderMembers();renderHome();renderHistory();toast('已移除');
 }
 
 // ══ 历史记录 ══
@@ -863,10 +904,10 @@ function addWeek(){
   const wk={id:uid(),name,yearNum,qNum,q,start,end};
   D.weeks.push(wk);D.currentWid=wk.id;ghSave(D);
   ['wk-name','wk-start','wk-end','wk-yearnum','wk-qnum'].forEach(id=>document.getElementById(id).value='');
-  renderHistory();renderHRDRSelects();updateSub();
+  renderHistory();renderHRDRSelects();updateSub();refreshSelects();
   toast(`${name} 已创建并切换`);
 }
-function setCurWeek(id){D.currentWid=id;ghSave(D);renderHistory();renderHRDRSelects();updateSub();toast('已切换：'+gw(id)?.name);}
+function setCurWeek(id){D.currentWid=id;ghSave(D);renderHistory();renderHRDRSelects();updateSub();refreshSelects();toast('已切换：'+gw(id)?.name);}
 function delWeek(id){
   if(!confirm('删除该周次及所有打卡记录？'))return;
   D.weeks=D.weeks.filter(w=>w.id!==id);
@@ -877,13 +918,20 @@ function delWeek(id){
 
 // ══ 启动 ══
 if(!getToken()){showTokenModal();}else{
-  // 先用缓存立刻渲染
   const cached=localStorage.getItem('data_cache');
   if(cached){
     try{D=JSON.parse(cached);renderHome();renderMembers();renderHistory();renderHRDRSelects();updateSub();refreshSelects();}catch(e){}
+    // 后台静默拉最新数据，只刷新当前 tab + 顶部状态
+    ghLoadRaw().then(fresh=>{
+      D=fresh;
+      localStorage.setItem('data_cache',JSON.stringify(fresh));
+      updateSub();refreshSelects();renderHRDRSelects();
+      const activeTab=document.querySelector('.tab.active');
+      if(activeTab)activeTab.click();
+    }).catch(()=>{});
+  } else {
+    init();
   }
-  // 后台同步最新数据
-  init().then(()=>{refreshSelects();});
 }
 </script>
 </body>
