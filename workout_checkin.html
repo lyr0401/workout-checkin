@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HRDR运动打卡统计</title>
+<style>
+:root{
+  --bg:#f5f4f0;--card:#fff;--border:#e5e3db;--text:#1c1c1a;--muted:#8a8880;
+  --green:#2a6049;--gl:#e6f2ec;--orange:#d4621a;--tag:#eeece6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh;}
+.app{max-width:900px;margin:0 auto;padding:20px 16px 80px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
+.topbar h1{font-size:20px;font-weight:700;}
+.topbar .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+.tabs{display:flex;gap:2px;margin-bottom:20px;background:var(--border);border-radius:10px;padding:3px;width:fit-content;}
+.tab{padding:6px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--muted);transition:all .15s;white-space:nowrap;}
+.tab.active{background:var(--card);color:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.07);}
+.section{display:none;}.section.active{display:block;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px;}
+.card-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;}
+.card-title .sub{font-size:12px;color:var(--muted);font-weight:400;}
+.srow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.sbox{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.sbox .lbl{font-size:12px;color:var(--muted);margin-bottom:3px;}
+.sbox .val{font-size:26px;font-weight:700;}
+.val.g{color:var(--green);}.val.o{color:var(--orange);}
+table{width:100%;border-collapse:collapse;}
+th{font-size:12px;color:var(--muted);font-weight:500;padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:#fafaf7;}
+td{padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}tr:hover td{background:#fafaf7;}
+.rank{width:36px;font-size:13px;color:var(--muted);font-weight:600;}
+.rank.g1{color:#c8a020;}.rank.g2{color:#909aab;}.rank.g3{color:#a06838;}
+.mcell{display:flex;align-items:center;gap:10px;}
+.av{width:30px;height:30px;border-radius:50%;background:var(--tag);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.mname{font-weight:500;font-size:13px;}.mpref{font-size:11px;color:var(--muted);}
+.cnt{font-weight:700;font-size:15px;}.cnt.hit{color:var(--green);}.cnt.miss{color:#ccc;}
+.ttag{display:inline-block;background:var(--tag);color:var(--muted);font-size:11px;padding:2px 7px;border-radius:5px;}
+.upload-zone{border:1.5px dashed var(--border);border-radius:12px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:12px;}
+.upload-zone:hover,.upload-zone.drag{background:var(--gl);border-color:var(--green);}
+.upload-zone .icon{font-size:30px;margin-bottom:8px;}
+.upload-zone .hint{font-size:13px;font-weight:500;margin-bottom:3px;}
+.upload-zone .hint2{font-size:12px;color:var(--muted);}
+.lbar{height:3px;background:var(--gl);border-radius:3px;margin-bottom:10px;overflow:hidden;display:none;}
+.lbar-inner{height:100%;width:40%;background:var(--green);border-radius:3px;animation:slide 1.2s ease-in-out infinite;}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+.ri-item{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 10px;border-radius:9px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg);}
+.ri-item.warn{border-color:#f5c87a;background:#fffbf0;}
+.ri-item.err{border-color:#ffaaaa;background:#fff5f5;}
+.ri-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--green);cursor:pointer;flex-shrink:0;}
+.ri-item select,.ri-item input[type=text],.ri-item input[type=date]{border:1px solid var(--border);border-radius:7px;padding:4px 7px;font-size:12px;background:var(--card);color:var(--text);font-family:inherit;outline:none;}
+.ri-item .warn-label{font-size:11px;color:#c8a020;background:#fff8e0;padding:2px 7px;border-radius:5px;}
+.frow{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;}
+.fgrp{display:flex;flex-direction:column;gap:5px;}
+.fgrp label{font-size:12px;color:var(--muted);}
+select,input[type=text],input[type=date],input[type=number]{border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;background:var(--bg);color:var(--text);font-family:inherit;outline:none;}
+select:focus,input:focus{border-color:var(--green);}
+.btn{padding:8px 18px;border-radius:9px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:inherit;}
+.btn-p{background:var(--green);color:#fff;}.btn-p:hover{opacity:.88;}
+.btn-s{background:var(--tag);color:var(--text);border:1px solid var(--border);}.btn-s:hover{background:var(--border);}
+.btn-d{background:#fff0f0;color:#c00;font-size:12px;padding:4px 10px;border:1px solid #fdd;}.btn-d:hover{background:#ffe0e0;}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.log-list{display:flex;flex-direction:column;gap:6px;}
+.log-item{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 12px;background:var(--bg);border-radius:9px;font-size:13px;}
+.log-date{color:var(--muted);font-size:12px;min-width:42px;}
+.log-type{flex:1;min-width:80px;}
+.log-joint{font-size:11px;color:var(--orange);}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.pcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;}
+.ptop{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.pname{font-weight:600;font-size:14px;flex:1;}
+.preal{font-size:11px;color:var(--muted);}
+.ptag{display:inline-block;background:var(--gl);color:var(--green);font-size:11px;padding:2px 8px;border-radius:5px;margin:2px 2px 0 0;}
+.witem{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;}
+.witem:last-child{border-bottom:none;}
+.witem:hover{background:#fafaf7;margin:0 -16px;padding:10px 16px;}
+.wtitle{font-size:13px;font-weight:500;}.wrange{font-size:11px;color:var(--muted);margin-top:2px;}
+.wactions{display:flex;gap:6px;}
+.cur-badge{font-size:11px;background:var(--gl);color:var(--green);padding:1px 7px;border-radius:5px;margin-left:6px;}
+.wdetail{display:none;background:#fafaf7;border-radius:10px;padding:14px;margin:8px 0;}
+.wdetail.open{display:block;}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0;}
+.empty{color:var(--muted);font-size:13px;padding:18px;text-align:center;}
+.status-text{font-size:13px;color:var(--muted);padding:6px 0;}
+.sind{display:none;font-size:12px;color:var(--green);padding:3px 10px;background:var(--gl);border-radius:20px;}
+.sind.show{display:inline-block;}.sind.err{color:var(--orange);background:#fdeee4;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1c1c1a;color:#fff;padding:9px 22px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:999;}
+.toast.show{opacity:1;}
+
+/* ── HRDR排行榜 ── */
+.hrdr-wrap{position:relative;width:100%;max-width:700px;margin:0 auto;}
+.hrdr-bg{width:100%;display:block;border-radius:12px;}
+.hrdr-overlay{position:absolute;top:0;left:0;width:100%;height:100%;}
+.hrdr-time{position:absolute;text-align:center;font-size:1.8%;color:#5a3a00;font-weight:500;white-space:nowrap;}
+.hrdr-table{position:absolute;width:100%;}
+.hrdr-row{position:absolute;width:100%;display:flex;align-items:center;}
+.hrdr-cell{display:flex;align-items:center;justify-content:center;font-size:1.9%;color:#3a2000;font-weight:500;}
+.hrdr-cell.name{justify-content:center;font-weight:600;}
+.di-badge{display:inline-flex;align-items:center;gap:2px;}
+.di-coin{width:2%;min-width:14px;height:auto;}
+.announce-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;font-size:13px;white-space:pre-wrap;line-height:1.9;margin-top:12px;font-family:inherit;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div>
+      <h1>HRDR运动打卡统计 🏃</h1>
+      <div class="sub" id="week-sub">加载中…</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="sind" id="sind">保存中…</span>
+      <button class="btn btn-s btn-sm" onclick="clearToken()" title="重新配置Token" style="font-size:11px;padding:3px 8px;">⚙ Token</button>
+    </div>
+  </div>
+
+  <!-- Token 配置弹窗 -->
+  <div id="token-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:16px;padding:28px 32px;max-width:440px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+      <div style="font-size:18px;font-weight:700;margin-bottom:8px;">首次使用配置</div>
+      <div style="font-size:13px;color:#8a8880;margin-bottom:20px;line-height:1.7;">
+        请输入 GitHub Token 以连接数据存储。<br>
+        Token 只需填写一次，会保存在本设备浏览器中。<br>
+        如不知道 Token，请联系管理员获取。
+      </div>
+      <div style="font-size:12px;color:#8a8880;margin-bottom:6px;">GitHub Token</div>
+      <input type="password" id="token-input" placeholder="粘贴 Token（ghp_ 开头）" style="width:100%;margin-bottom:16px;font-size:13px;border-radius:8px;border:1px solid #e5e3db;padding:9px 12px;font-family:monospace;">
+      <button class="btn btn-p" onclick="saveToken()" style="width:100%;">确认，开始使用</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('home',this)">本周打卡</button>
+    <button class="tab" onclick="switchTab('hrdr',this)">HRDR排行榜</button>
+    <button class="tab" onclick="switchTab('members',this)">成员管理</button>
+    <button class="tab" onclick="switchTab('history',this)">历史记录</button>
+  </div>
+
+  <!-- ══ 本周打卡 ══ -->
+  <div class="section active" id="tab-home">
+    <div class="srow">
+      <div class="sbox"><div class="lbl">已打卡人数</div><div class="val g" id="s-checked">—</div></div>
+      <div class="sbox"><div class="lbl">本周总次数</div><div class="val" id="s-total">—</div></div>
+      <div class="sbox"><div class="lbl">未打卡人数</div><div class="val o" id="s-missing">—</div></div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+      <div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);">
+        <span style="font-size:14px;font-weight:600;" id="rank-title">本周排行</span>
+        <span style="font-size:12px;color:var(--muted);" id="rank-range"></span>
+      </div>
+      <table>
+        <thead><tr><th style="width:36px">#</th><th>成员</th><th style="width:60px">次数</th><th>运动类型</th><th style="width:80px">未打卡</th></tr></thead>
+        <tbody id="rank-tbody"></tbody>
+      </table>
+    </div>
+
+    <hr class="divider">
+
+    <!-- 截图识别 -->
+    <div class="card">
+      <div class="card-title">📷 上传截图识别<span class="sub">自动切图放大，按顺序识别</span></div>
+      <div class="lbar" id="ai-bar"><div class="lbar-inner"></div></div>
+      <div class="upload-zone" id="drop-zone"
+        onclick="document.getElementById('img-input').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="onDrop(event)">
+        <div class="icon">📂</div>
+        <div class="hint">点击选择 或 拖拽群聊截图到这里</div>
+        <div class="hint2">自动切成小段放大识别，结果按截图顺序排列，对照截图核对后录入</div>
+        <input type="file" id="img-input" accept="image/*" multiple style="display:none" onchange="onFiles(this.files)">
+      </div>
+      <div id="ai-status" class="status-text" style="display:none;"></div>
+      <div id="ai-result-wrap" style="display:none;margin-top:10px;">
+        <div style="font-size:13px;font-weight:500;margin-bottom:4px;">
+          识别结果
+          <span style="font-size:11px;color:var(--muted);font-weight:400;">— 结果按截图顺序排列，对照截图核对，可修改后录入</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+          🟡 黄色 = 共同打卡对象未知，请手动填写　⬜ 取消勾选 = 不录入该条
+        </div>
+        <div id="ai-list" style="margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="ai-week-sel" style="min-width:130px;"></select>
+          <input type="date" id="ai-date" style="width:140px;">
+          <button class="btn btn-p" onclick="batchImport()">录入勾选项</button>
+          <button class="btn btn-s" onclick="resetAI()">清空</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px;">日期默认今天，如截图跨多天请在每条记录里单独修改</div>
+      </div>
+    </div>
+
+    <!-- 手动录入 -->
+    <div class="card">
+      <div class="card-title">✏️ 手动录入</div>
+      <div class="frow">
+        <div class="fgrp"><label>成员</label><select id="m-sel" style="min-width:120px;"></select></div>
+        <div class="fgrp"><label>日期</label><input type="date" id="m-date"></div>
+        <div class="fgrp"><label>运动类型</label>
+          <select id="m-type">
+            <option>散步</option><option>跑步</option><option>骑行</option>
+            <option>力量训练</option><option>球类运动</option><option>瑜伽/拉伸</option>
+            <option>游泳</option><option>其他</option>
+          </select>
+        </div>
+        <div class="fgrp"><label>周次</label><select id="m-week" style="min-width:120px;"></select></div>
+      </div>
+      <div class="frow">
+        <div class="fgrp"><label>共同打卡伙伴（可选）</label><select id="m-joint" style="min-width:120px;"></select></div>
+        <div class="fgrp"><label>备注（可选）</label><input type="text" id="m-note" placeholder="如：海淀跑步10km" style="width:180px;"></div>
+        <button class="btn btn-p" style="align-self:flex-end;" onclick="manualAdd()">录入</button>
+      </div>
+    </div>
+
+    <!-- 本周流水 -->
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:14px 16px 10px;border-bottom:1px solid var(--border);">
+        <span style="font-size:14px;font-weight:600;">本周已录入记录</span>
+      </div>
+      <div style="padding:12px 16px;" id="log-area"><div class="empty">暂无记录</div></div>
+    </div>
+  </div>
+
+  <!-- ══ HRDR排行榜 ══ -->
+  <div class="section" id="tab-hrdr">
+    <div class="card">
+      <div class="card-title">
+        HRDR健康储蓄榜
+        <div style="display:flex;gap:8px;">
+          <select id="hrdr-week-sel" style="font-size:12px;padding:4px 8px;" onchange="renderHRDR()"></select>
+          <button class="btn btn-s btn-sm" onclick="renderHRDR()">刷新</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">截图下方排行榜区域发送到微信群</div>
+
+      <!-- 排行榜主体 -->
+      <div id="hrdr-main" style="position:relative;width:100%;font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;">
+        <img id="hrdr-bg" src="https://raw.githubusercontent.com/lyr0401/workout-checkin/main/bg.jpg"
+          style="width:100%;display:block;border-radius:12px;"
+          onload="renderHRDR()"
+          onerror="this.style.display='none';document.getElementById('hrdr-fallback').style.display='block'">
+        <div id="hrdr-fallback" style="display:none;background:#e8f4fd;border-radius:12px;padding:20px;text-align:center;color:var(--muted);font-size:13px;">
+          背景图加载中…请确认 bg.jpg 已上传到 GitHub
+        </div>
+        <div id="hrdr-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 成员管理 ══ -->
+  <div class="section" id="tab-members">
+    <div class="card">
+      <div class="card-title">添加成员</div>
+      <div class="frow">
+        <div class="fgrp"><label>微信昵称</label><input type="text" id="new-nick" placeholder="群里显示的昵称" style="width:130px;"></div>
+        <div class="fgrp"><label>真实姓名</label><input type="text" id="new-name" placeholder="排行榜显示" style="width:110px;"></div>
+        <div class="fgrp"><label>运动偏好</label><input type="text" id="new-pref" placeholder="散步,跑步" style="width:130px;"></div>
+        <div class="fgrp"><label>全年Di币初始值</label><input type="number" id="new-dibase" placeholder="0" style="width:90px;"></div>
+        <button class="btn btn-p" style="align-self:flex-end;" onclick="addMember()">添加</button>
+      </div>
+    </div>
+    <div class="pgrid" id="pgrid"></div>
+  </div>
+
+  <!-- ══ 历史记录 ══ -->
+  <div class="section" id="tab-history">
+    <div class="card">
+      <div class="card-title">新建周次</div>
+      <div class="frow">
+        <div class="fgrp"><label>周次名称</label><input type="text" id="wk-name" placeholder="如：第18周" style="width:110px;"></div>
+        <div class="fgrp"><label>全年第几周</label><input type="number" id="wk-yearnum" placeholder="18" style="width:90px;"></div>
+        <div class="fgrp"><label>Q第几周</label><input type="number" id="wk-qnum" placeholder="4" style="width:80px;"></div>
+        <div class="fgrp"><label>开始日期</label><input type="date" id="wk-start"></div>
+        <div class="fgrp"><label>结束日期</label><input type="date" id="wk-end"></div>
+        <button class="btn btn-p" style="align-self:flex-end;" onclick="addWeek()">创建并切换</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">所有周次 <span class="sub">点击展开查看详情</span></div>
+      <div id="wk-list"><div class="empty">暂无记录</div></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ══ GitHub 配置 ══
+const GH_OWNER = 'lyr0401';
+const GH_REPO  = 'workout-checkin';
+const GH_FILE  = 'data.json';
+let fileSha = null;
+
+function getToken(){ return localStorage.getItem('gh_token')||''; }
+function getAPI(){ return `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`; }
+
+function checkToken(){
+  if(!getToken()){
+    document.getElementById('token-modal').style.display='flex';
+    return false;
+  }
+  return true;
+}
+
+function saveToken(){
+  const t = document.getElementById('token-input').value.trim();
+  if(!t){alert('请输入 Token');return;}
+  localStorage.setItem('gh_token',t);
+  document.getElementById('token-modal').style.display='none';
+  toast('Token 已保存，正在加载数据…');
+  init();
+}
+
+function clearToken(){
+  if(!confirm('清除 Token 后需要重新配置，确认吗？'))return;
+  localStorage.removeItem('gh_token');
+  location.reload();
+}
+
+async function ghLoad() {
+  if(!checkToken()) throw new Error('未配置Token');
+  const r = await fetch(getAPI(),{headers:{'Authorization':`token ${getToken()}`,'Accept':'application/vnd.github.v3+json'}});
+  if(!r.ok) throw new Error('读取失败 '+r.status);
+  const j = await r.json();
+  fileSha = j.sha;
+  return JSON.parse(atob(j.content.replace(/\n/g,'')));
+}
+
+async function ghSave(data) {
+  if(!checkToken()) return;
+  sind('saving');
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(data,null,2))));
+  const r = await fetch(getAPI(),{
+    method:'PUT',
+    headers:{'Authorization':`token ${getToken()}`,'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'},
+    body:JSON.stringify({message:'更新打卡数据',content,sha:fileSha})
+  });
+  if(!r.ok){sind('err');return;}
+  fileSha=(await r.json()).content.sha;
+  sind('done');
+}
+
+function sind(s){
+  const el=document.getElementById('sind');
+  el.className='sind';
+  if(s==='saving'){el.textContent='保存中…';el.classList.add('show');}
+  else if(s==='done'){el.textContent='✓ 已保存';el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2500);}
+  else if(s==='err'){el.textContent='⚠ 保存失败';el.classList.add('show','err');setTimeout(()=>el.classList.remove('show'),3000);}
+}
+
+// ══ 默认数据 ══
+function defaultData(){
+  return {
+    members:[
+      {id:'m1', nick:'小偶尔',  name:'王晶晶', prefs:['散步'],    diBase:0},
+      {id:'m2', nick:'Anna',    name:'Anna',   prefs:['散步','骑行'], diBase:0},
+      {id:'m3', nick:'dahe🌻',  name:'杨大赫', prefs:['骑行','跑步'], diBase:0},
+      {id:'m4', nick:'Batijiang',name:'蒋万鹏',prefs:['散步'],    diBase:0},
+      {id:'m5', nick:'静小骨',  name:'谷静',   prefs:['散步'],    diBase:0},
+      {id:'m6', nick:'Iris',    name:'Iris',   prefs:['跑步','散步'], diBase:0},
+      {id:'m7', nick:'HelloBani',name:'李燕',  prefs:['散步'],    diBase:0},
+      {id:'m8', nick:'艾熙Icy', name:'艾熙',   prefs:['力量训练'], diBase:0},
+      {id:'m9', nick:'维佳',    name:'安维佳', prefs:['散步'],    diBase:0},
+      {id:'m10',nick:'小李',    name:'李淼',   prefs:['散步'],    diBase:0},
+      {id:'m11',nick:'戴波',    name:'戴波',   prefs:['散步'],    diBase:0},
+      {id:'m12',nick:'Joice',   name:'Joice',  prefs:['散步'],    diBase:0},
+      {id:'m13',nick:'Caroline',name:'Caroline',prefs:['散步'],   diBase:0},
+      {id:'m14',nick:'王晞',    name:'王晞',   prefs:['散步'],    diBase:0},
+      {id:'m15',nick:'nancy',   name:'Nancy',  prefs:['散步'],    diBase:0},
+      {id:'m16',nick:'Stella',  name:'Stella', prefs:['散步'],    diBase:0},
+      {id:'m17',nick:'流水斋',  name:'Jason',  prefs:['散步'],    diBase:0},
+      {id:'m18',nick:'Vincent', name:'胡新奇', prefs:['散步'],    diBase:0},
+    ],
+    weeks:[{id:'w1',name:'第17周',yearNum:16,qNum:3,q:2,start:'2026-04-20',end:'2026-04-26'}],
+    checkins:[
+      {id:'c1', mid:'m10',wid:'w1',date:'2026-04-20',type:'骑行',note:'共享单车',joint:null},
+      {id:'c2', mid:'m4', wid:'w1',date:'2026-04-20',type:'散步',note:'12362步',joint:null},
+      {id:'c3', mid:'m2', wid:'w1',date:'2026-04-20',type:'散步',note:'手表22:26:32',joint:null},
+      {id:'c4', mid:'m3', wid:'w1',date:'2026-04-20',type:'骑行',note:'昌平4.16km',joint:null},
+      {id:'c5', mid:'m1', wid:'w1',date:'2026-04-20',type:'散步',note:'8226步',joint:null},
+      {id:'c6', mid:'m7', wid:'w1',date:'2026-04-20',type:'散步',note:'8385步',joint:'m9'},
+      {id:'c7', mid:'m9', wid:'w1',date:'2026-04-20',type:'散步',note:'9558步',joint:'m7'},
+      {id:'c8', mid:'m6', wid:'w1',date:'2026-04-20',type:'散步',note:'8633步',joint:null},
+      {id:'c9', mid:'m3', wid:'w1',date:'2026-04-21',type:'跑步',note:'海淀10.35km',joint:null},
+      {id:'c10',mid:'m6', wid:'w1',date:'2026-04-21',type:'跑步',note:'户外跑步4.37km',joint:null},
+      {id:'c11',mid:'m2', wid:'w1',date:'2026-04-21',type:'散步',note:'联合走步园区一周',joint:null},
+      {id:'c12',mid:'m1', wid:'w1',date:'2026-04-21',type:'散步',note:'11924步',joint:null},
+      {id:'c13',mid:'m7', wid:'w1',date:'2026-04-21',type:'散步',note:'10504步',joint:null},
+      {id:'c14',mid:'m8', wid:'w1',date:'2026-04-21',type:'力量训练',note:'1小时 96bpm',joint:null},
+      {id:'c15',mid:'m4', wid:'w1',date:'2026-04-22',type:'散步',note:'13797步',joint:null},
+      {id:'c16',mid:'m2', wid:'w1',date:'2026-04-22',type:'骑行',note:'手表08:25',joint:null},
+      {id:'c17',mid:'m6', wid:'w1',date:'2026-04-22',type:'散步',note:'5.68km',joint:null},
+      {id:'c18',mid:'m6', wid:'w1',date:'2026-04-22',type:'跑步',note:'14488步/10.5km',joint:null},
+    ],
+    currentWid:'w1'
+  };
+}
+
+// ══ State ══
+let D = null;
+async function init(){
+  try{ D=await ghLoad(); }
+  catch(e){ toast('数据加载失败，使用本地默认数据'); D=defaultData(); }
+  renderHome(); renderMembers(); renderHistory(); renderHRDRSelects(); updateSub();
+}
+
+function uid(){return 'id'+Date.now()+Math.random().toString(36).slice(2,6);}
+function gm(id){return D.members.find(m=>m.id===id);}
+function gw(id){return D.weeks.find(w=>w.id===id);}
+function fd(s){if(!s)return'';const d=new Date(s);return`${d.getMonth()+1}/${d.getDate()}`;}
+function av(m,sz=30){return `<div class="av" style="width:${sz}px;height:${sz}px;font-size:${Math.round(sz*.4)}px;">${(m?.name||m?.nick||'?').slice(0,1)}</div>`;}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function updateSub(){const w=gw(D.currentWid);document.getElementById('week-sub').textContent=w?`当前：${w.name}（${w.start} ~ ${w.end}）`:'未设置当前周次';}
+
+// ══ Tabs ══
+function switchTab(name,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='home')renderHome();
+  if(name==='hrdr'){renderHRDRSelects();renderHRDR();}
+  if(name==='members')renderMembers();
+  if(name==='history')renderHistory();
+}
+
+// ══ Di币计算 ══
+function calcDi(memberId, weekId){
+  // 全年Di币 = 初始值 + 所有周打卡次数
+  const m = gm(memberId);
+  const base = m?.diBase || 0;
+  const total = D.checkins.filter(c=>c.mid===memberId).length;
+  return base + total;
+}
+
+function calcQ2Di(memberId){
+  // Q2周次：yearNum 14~当前
+  const q2weeks = D.weeks.filter(w=>w.q===2).map(w=>w.id);
+  return D.checkins.filter(c=>c.mid===memberId && q2weeks.includes(c.wid)).length;
+}
+
+function calcQ2Invest(memberId){
+  // 定投周数：Q2中有打卡记录的周数
+  const q2weeks = D.weeks.filter(w=>w.q===2);
+  const invested = q2weeks.filter(w=>D.checkins.some(c=>c.mid===memberId&&c.wid===w.id)).length;
+  return {invested, total:q2weeks.length};
+}
+
+function calcWeekDi(memberId, weekId){
+  return D.checkins.filter(c=>c.mid===memberId&&c.wid===weekId).length;
+}
+
+// ══ Home ══
+function renderHome(){renderStats();refreshSelects();renderLog();}
+
+function renderStats(){
+  const wk=gw(D.currentWid);
+  const wcs=D.checkins.filter(c=>c.wid===D.currentWid);
+  const counts={},types={};
+  wcs.forEach(c=>{
+    counts[c.mid]=(counts[c.mid]||0)+1;
+    if(!types[c.mid])types[c.mid]={};
+    types[c.mid][c.type]=(types[c.mid][c.type]||0)+1;
+  });
+  document.getElementById('s-checked').textContent=Object.keys(counts).length;
+  document.getElementById('s-total').textContent=wcs.length;
+  document.getElementById('s-missing').textContent=D.members.filter(m=>!counts[m.id]).length;
+  document.getElementById('rank-title').textContent=wk?wk.name+' 排行':'本周排行';
+  document.getElementById('rank-range').textContent=wk?`${wk.start} ~ ${wk.end}`:'';
+  const sorted=[...D.members].map(m=>({m,cnt:counts[m.id]||0})).sort((a,b)=>b.cnt-a.cnt);
+  const tbody=document.getElementById('rank-tbody');
+  if(!wk){tbody.innerHTML='<tr><td colspan="5" class="empty">请先在「历史记录」中新建周次</td></tr>';return;}
+  tbody.innerHTML=sorted.map(({m,cnt},i)=>{
+    const rc=cnt>0?(i===0?'g1':i===1?'g2':i===2?'g3':''):'';
+    const rt=cnt>0?(i===0?'🥇':i===1?'🥈':i===2?'🥉':i+1):'—';
+    const ts=types[m.id]?Object.entries(types[m.id]).map(([k,v])=>v>1?`${k}×${v}`:k).join(' · '):'—';
+    return `<tr>
+      <td class="rank ${rc}">${rt}</td>
+      <td><div class="mcell">${av(m)}<div><div class="mname">${m.nick}</div><div class="mpref">${m.name} · ${m.prefs.join('/')}</div></div></div></td>
+      <td class="cnt ${cnt>0?'hit':'miss'}">${cnt}</td>
+      <td><span class="ttag">${ts}</span></td>
+      <td style="font-size:12px;color:${cnt===0?'var(--orange)':'var(--muted)'};">${cnt===0?'⚠ 未打卡':''}</td>
+    </tr>`;
+  }).join('');
+}
+
+function refreshSelects(){
+  const mOpts=D.members.map(m=>`<option value="${m.id}">${m.nick}（${m.name}）</option>`).join('');
+  document.getElementById('m-sel').innerHTML=mOpts;
+  document.getElementById('m-joint').innerHTML='<option value="">无</option>'+mOpts;
+  document.getElementById('m-week').innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
+  if(!document.getElementById('m-date').value) document.getElementById('m-date').value=new Date().toISOString().slice(0,10);
+  const aiWk=document.getElementById('ai-week-sel');
+  if(aiWk) aiWk.innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
+  if(!document.getElementById('ai-date').value) document.getElementById('ai-date').value=new Date().toISOString().slice(0,10);
+}
+
+function renderLog(){
+  const area=document.getElementById('log-area');
+  const logs=D.checkins.filter(c=>c.wid===D.currentWid).sort((a,b)=>b.date.localeCompare(a.date));
+  if(!logs.length){area.innerHTML='<div class="empty">暂无记录</div>';return;}
+  area.innerHTML='<div class="log-list">'+logs.map(c=>{
+    const m=gm(c.mid),j=c.joint?gm(c.joint):null;
+    return `<div class="log-item">
+      ${av(m,26)}
+      <span style="font-weight:500;min-width:80px;">${m?.nick||'?'}</span>
+      <span class="log-date">${fd(c.date)}</span>
+      <span class="log-type">${c.type}${c.note?' · '+c.note:''}</span>
+      ${j?`<span class="log-joint">+${j.nick}</span>`:''}
+      <button class="btn btn-d" onclick="delCheckin('${c.id}')">删除</button>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function manualAdd(){
+  const mid=document.getElementById('m-sel').value;
+  const date=document.getElementById('m-date').value;
+  const type=document.getElementById('m-type').value;
+  const wid=document.getElementById('m-week').value;
+  const note=document.getElementById('m-note').value.trim();
+  const joint=document.getElementById('m-joint').value||null;
+  if(!mid||!date||!wid){toast('请填写完整');return;}
+  D.checkins.push({id:uid(),mid,wid,date,type,note,joint});
+  D.currentWid=wid; ghSave(D);
+  document.getElementById('m-note').value='';
+  renderHome(); toast('录入成功');
+}
+
+function delCheckin(id){
+  D.checkins=D.checkins.filter(c=>c.id!==id);
+  ghSave(D); renderHome(); toast('已删除');
+}
+
+// ══ AI 识别（切图放大）══
+let aiItems=[];
+
+function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag');onFiles(e.dataTransfer.files);}
+function onFiles(files){if(!files||!files.length)return;recognizeAll(Array.from(files));}
+
+async function sliceImage(file){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const W=img.width, H=img.height;
+      const TARGET_W=800;
+      const SEG_H=600, OVERLAP=60;
+      const segments=[];
+      let y=0, idx=0;
+      while(y<H){
+        const bot=Math.min(y+SEG_H,H);
+        const canvas=document.createElement('canvas');
+        const ratio=TARGET_W/W;
+        canvas.width=TARGET_W;
+        canvas.height=Math.round((bot-y)*ratio);
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,y,W,bot-y,0,0,canvas.width,canvas.height);
+        segments.push({dataUrl:canvas.toDataURL('image/jpeg',0.92),segIdx:idx,yStart:y,yEnd:bot});
+        y=bot-OVERLAP;
+        idx++;
+        if(bot>=H)break;
+      }
+      URL.revokeObjectURL(url);
+      resolve(segments);
+    };
+    img.src=url;
+  });
+}
+
+async function recognizeAll(files){
+  const bar=document.getElementById('ai-bar');
+  const statusEl=document.getElementById('ai-status');
+  const wrap=document.getElementById('ai-result-wrap');
+  bar.style.display='block'; statusEl.style.display='block'; wrap.style.display='none';
+  aiItems=[];
+  const names=D.members.map(m=>`${m.nick}（真实姓名：${m.name}）`).join('、');
+  const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'];
+
+  for(let fi=0;fi<files.length;fi++){
+    statusEl.textContent=`正在处理第 ${fi+1}/${files.length} 张截图，切图中…`;
+    const segments=await sliceImage(files[fi]);
+
+    for(let si=0;si<segments.length;si++){
+      const seg=segments[si];
+      statusEl.textContent=`第 ${fi+1}/${files.length} 张，识别第 ${si+1}/${segments.length} 段…`;
+      try{
+        const b64=seg.dataUrl.split(',')[1];
+        const resp=await fetch('https://api.anthropic.com/v1/messages',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            model:'claude-sonnet-4-20250514',
+            max_tokens:1500,
+            messages:[{role:'user',content:[
+              {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+              {type:'text',text:`这是微信群聊天记录截图的一段。群里打卡成员有：${names}。
+运动类型只能从以下选择：${TYPES.join('、')}。
+规则：
+1. 只识别发了图片的消息（[图片]标记或实际图片内容），忽略纯文字
+2. 每条消息左侧有昵称，优先匹配成员列表
+3. 如果图片里有两个人的运动数据，或文字提到邀请谁一起，记录joint字段
+4. 如果提到共同打卡但没说是谁，joint填"unknown"
+5. 根据图片内容判断运动类型：步数/散步APP/手表步数→散步，跑步配速/跑步APP→跑步，骑行路线→骑行，力量训练→力量训练
+6. 保持识别顺序和截图从上到下一致
+7. 仅返回JSON：{"checkins":[{"nick":"昵称","type":"运动类型","note":"简短备注如步数或距离","joint":"共同打卡昵称或unknown或空"}]}`
+            }]}]
+          })
+        });
+        const json=await resp.json();
+        const raw=(json.content||[]).map(b=>b.text||'').join('');
+        const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+        (parsed.checkins||[]).forEach(c=>{
+          // 去重：同一昵称同一类型不在相邻段重复
+          const last=aiItems[aiItems.length-1];
+          if(last&&last.nick===c.nick&&last.type===c.type&&si>0) return;
+          aiItems.push({...c, segIdx:seg.segIdx});
+        });
+      }catch(e){
+        statusEl.textContent=`第${fi+1}张第${si+1}段出错：${e.message}`;
+      }
+    }
+  }
+
+  bar.style.display='none';
+  statusEl.textContent=aiItems.length
+    ? `识别完成，共 ${aiItems.length} 条，按截图顺序排列，请对照截图核对后录入`
+    : '未识别到打卡，请检查截图是否清晰';
+  renderAIList();
+}
+
+function renderAIList(){
+  const wrap=document.getElementById('ai-result-wrap');
+  const list=document.getElementById('ai-list');
+  const today=new Date().toISOString().slice(0,10);
+
+  list.innerHTML=aiItems.map((c,i)=>{
+    const matched=D.members.find(m=>
+      m.nick===c.nick||c.nick.includes(m.nick)||m.nick.includes(c.nick)||
+      m.name===c.nick||c.nick.includes(m.name)
+    );
+    const mOpts=D.members.map(m=>`<option value="${m.id}" ${matched?.id===m.id?'selected':''}>${m.nick}（${m.name}）</option>`).join('');
+    const jOpts='<option value="">无</option><option value="unknown">不知道是谁</option>'+
+      D.members.map(m=>`<option value="${m.id}" ${c.joint&&c.joint!=='unknown'&&(m.nick===c.joint||c.joint.includes(m.nick))?'selected':''}>${m.nick}</option>`).join('');
+    const tOpts=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
+    const isWarn=c.joint==='unknown';
+    const defaultJoint=c.joint==='unknown'?'unknown':(D.members.find(m=>m.nick===c.joint||c.joint?.includes(m.nick))?.id||'');
+
+    return `<div class="ri-item ${isWarn?'warn':''}">
+      <input type="checkbox" id="chk${i}" checked>
+      <select id="ambr${i}" style="min-width:110px;">${mOpts}</select>
+      <input type="date" id="adt${i}" value="${today}" style="width:125px;">
+      <select id="atp${i}" style="min-width:90px;">${tOpts}</select>
+      <input type="text" id="ant${i}" value="${c.note||''}" placeholder="备注" style="width:95px;">
+      <select id="ajt${i}" style="min-width:90px;" id="ajt${i}">${jOpts.replace(`value="${defaultJoint}"`,`value="${defaultJoint}" selected`)}</select>
+      ${isWarn?'<span class="warn-label">⚠ 共同打卡对象未知</span>':''}
+    </div>`;
+  }).join('')||'<div class="empty">无识别结果</div>';
+
+  // 刷新周次选择
+  document.getElementById('ai-week-sel').innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
+  wrap.style.display='block';
+}
+
+function batchImport(){
+  const wid=document.getElementById('ai-week-sel').value;
+  const defaultDate=document.getElementById('ai-date').value;
+  if(!wid){toast('请选择周次');return;}
+  let n=0;
+  aiItems.forEach((_,i)=>{
+    if(!document.getElementById(`chk${i}`)?.checked) return;
+    const mid=document.getElementById(`ambr${i}`).value;
+    const date=document.getElementById(`adt${i}`).value||defaultDate;
+    const type=document.getElementById(`atp${i}`).value;
+    const note=document.getElementById(`ant${i}`).value.trim();
+    const jVal=document.getElementById(`ajt${i}`).value;
+    const joint=(jVal&&jVal!=='unknown'&&jVal!=='')?jVal:null;
+    if(!mid||!date) return;
+    D.checkins.push({id:uid(),mid,wid,date,type,note,joint});
+    n++;
+  });
+  D.currentWid=wid; ghSave(D);
+  toast(`已录入 ${n} 条`); resetAI(); renderHome();
+}
+
+function resetAI(){
+  aiItems=[];
+  document.getElementById('ai-status').style.display='none';
+  document.getElementById('ai-result-wrap').style.display='none';
+  document.getElementById('ai-bar').style.display='none';
+  document.getElementById('img-input').value='';
+}
+
+// ══ HRDR 排行榜 ══
+function renderHRDRSelects(){
+  const sel=document.getElementById('hrdr-week-sel');
+  if(sel) sel.innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
+}
+
+function renderHRDR(){
+  const wid=document.getElementById('hrdr-week-sel')?.value||D.currentWid;
+  const wk=gw(wid);
+  if(!wk) return;
+
+  const bg=document.getElementById('hrdr-bg');
+  const overlay=document.getElementById('hrdr-overlay');
+  if(!bg||!bg.complete||bg.naturalWidth===0) return;
+
+  const W=bg.offsetWidth, H=bg.offsetHeight;
+  // 基于图片实际渲染尺寸计算百分比定位
+  // 原图 1690x1676，各区域占比经测量：
+  const timeTop=15.5, timeLeft=20, timeW=60; // 周信息行
+  const tableTop=27.5; // 表格数据起始行（第一个名字）
+  const rowH=4.35;     // 每行高度占比
+  const nameLeft=8.5, nameW=14;
+  const col1L=26, col2L=44.5, col3L=62, col4L=80;
+  const colW=18;
+
+  // 计算Q2总Di币，按降序排列
+  const q2weeks=D.weeks.filter(w=>w.q===2).map(w=>w.id);
+  const ranked=[...D.members].map(m=>{
+    const weekDi=calcWeekDi(m.id,wid);
+    const q2Di=calcQ2Di(m.id);
+    const yearDi=calcDi(m.id,wid);
+    const inv=calcQ2Invest(m.id);
+    return {m,weekDi,q2Di,yearDi,inv};
+  }).sort((a,b)=>b.q2Di-a.q2Di||b.yearDi-a.yearDi);
+
+  // Di币图标SVG（内联，金色圆形+Di文字）
+  const diSVG=`<svg width="16" height="16" viewBox="0 0 16 16" style="vertical-align:middle;margin-right:1px;"><circle cx="8" cy="8" r="7.5" fill="#f5c040" stroke="#c8900a" stroke-width="0.5"/><text x="8" y="11.5" text-anchor="middle" font-size="7" font-weight="bold" fill="#7a4a00" font-family="sans-serif">Di</text></svg>`;
+
+  // 周信息
+  const timeStr=`储蓄时间：${wk.start.slice(5).replace('-','.')}－${wk.end.slice(5).replace('-','.')}，全年第${wk.yearNum}周，Q${wk.q||2}第${wk.qNum}周`;
+
+  let html=`<div style="position:absolute;top:${timeTop}%;left:${timeLeft}%;width:${timeW}%;text-align:center;font-size:${W*0.018}px;color:#5a3a00;font-weight:500;white-space:nowrap;">${timeStr}</div>`;
+
+  ranked.forEach(({m,weekDi,q2Di,yearDi,inv},i)=>{
+    const top=tableTop+i*rowH;
+    const isFirst=i===0;
+    const crown=isFirst?'👑 ':'';
+    const fs=W*0.019;
+    const diFS=W*0.017;
+
+    // 名字
+    html+=`<div style="position:absolute;top:${top}%;left:${nameLeft}%;width:${nameW}%;text-align:center;font-size:${fs}px;color:#3a2000;font-weight:${isFirst?700:500};">${crown}${m.name}</div>`;
+
+    // 本周储蓄额
+    if(weekDi>0){
+      html+=`<div style="position:absolute;top:${top}%;left:${col1L}%;width:${colW}%;text-align:center;font-size:${diFS}px;color:#3a2000;display:flex;align-items:center;justify-content:center;gap:2px;">${diSVG}<span>×${weekDi}</span></div>`;
+    }
+
+    // Q2定投周数
+    if(inv.total>0){
+      html+=`<div style="position:absolute;top:${top}%;left:${col2L}%;width:${colW}%;text-align:center;font-size:${fs}px;color:#3a2000;">${inv.invested}/${inv.total}</div>`;
+    }
+
+    // Q2健康Di币
+    if(q2Di>0){
+      html+=`<div style="position:absolute;top:${top}%;left:${col3L}%;width:${colW}%;text-align:center;font-size:${diFS}px;color:#3a2000;display:flex;align-items:center;justify-content:center;gap:2px;">${diSVG}<span>×${q2Di}</span></div>`;
+    }
+
+    // 全年健康Di币
+    if(yearDi>0){
+      html+=`<div style="position:absolute;top:${top}%;left:${col4L}%;width:${colW}%;text-align:center;font-size:${diFS}px;color:#3a2000;display:flex;align-items:center;justify-content:center;gap:2px;">${diSVG}<span>×${yearDi}</span></div>`;
+    }
+  });
+
+  overlay.innerHTML=html;
+}
+
+// 图片加载完再渲染
+window.addEventListener('load',()=>{
+  const bg=document.getElementById('hrdr-bg');
+  if(bg) bg.addEventListener('load',renderHRDR);
+});
+
+// ══ 成员管理 ══
+function renderMembers(){
+  document.getElementById('pgrid').innerHTML=D.members.map(m=>`
+    <div class="pcard">
+      <div class="ptop">
+        <div class="av" style="width:36px;height:36px;font-size:15px;">${m.name.slice(0,1)}</div>
+        <div style="flex:1;">
+          <div class="pname">${m.nick}</div>
+          <div class="preal">${m.name}</div>
+        </div>
+        <button class="btn btn-d" onclick="delMember('${m.id}')">移除</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">偏好：${m.prefs.map(p=>`<span class="ptag">${p}</span>`).join('')}</div>
+      <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+        <span style="color:var(--muted);">全年Di币初始值：</span>
+        <input type="number" value="${m.diBase||0}" style="width:70px;padding:3px 6px;font-size:12px;" onchange="updateDiBase('${m.id}',this.value)">
+      </div>
+    </div>`).join('');
+}
+
+function addMember(){
+  const nick=document.getElementById('new-nick').value.trim();
+  const name=document.getElementById('new-name').value.trim();
+  const prefs=document.getElementById('new-pref').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const diBase=parseInt(document.getElementById('new-dibase').value)||0;
+  if(!nick||!name){toast('请填写昵称和姓名');return;}
+  if(D.members.find(m=>m.nick===nick)){toast('该成员已存在');return;}
+  D.members.push({id:uid(),nick,name,prefs,diBase});
+  ghSave(D);
+  ['new-nick','new-name','new-pref','new-dibase'].forEach(id=>document.getElementById(id).value='');
+  renderMembers(); toast('已添加：'+name);
+}
+
+function updateDiBase(id,val){
+  const m=gm(id);
+  if(m){m.diBase=parseInt(val)||0; ghSave(D);}
+}
+
+function delMember(id){
+  if(!confirm('确认移除？'))return;
+  D.members=D.members.filter(m=>m.id!==id); ghSave(D); renderMembers(); toast('已移除');
+}
+
+// ══ 历史记录 ══
+function renderHistory(){
+  const el=document.getElementById('wk-list');
+  if(!D.weeks.length){el.innerHTML='<div class="empty">暂无周次</div>';return;}
+  el.innerHTML=[...D.weeks].reverse().map(w=>{
+    const cnt=D.checkins.filter(c=>c.wid===w.id).length;
+    const cur=w.id===D.currentWid;
+    const wcs=D.checkins.filter(c=>c.wid===w.id).sort((a,b)=>b.date.localeCompare(a.date));
+    const detailRows=wcs.map(c=>{
+      const m=gm(c.mid),j=c.joint?gm(c.joint):null;
+      return `<div class="log-item" style="background:var(--card);">
+        ${av(m,24)}
+        <span style="font-weight:500;min-width:70px;font-size:12px;">${m?.nick||'?'}</span>
+        <span style="color:var(--muted);font-size:12px;min-width:40px;">${fd(c.date)}</span>
+        <span style="flex:1;font-size:12px;">${c.type}${c.note?' · '+c.note:''}</span>
+        ${j?`<span style="font-size:11px;color:var(--orange);">+${j.nick}</span>`:''}
+        <button class="btn btn-d" onclick="delCheckin('${c.id}');renderHistory();">删除</button>
+      </div>`;
+    }).join('');
+
+    return `<div style="border-bottom:1px solid var(--border);">
+      <div class="witem" onclick="toggleDetail('wd-${w.id}')">
+        <div>
+          <div class="wtitle">${w.name}${cur?'<span class="cur-badge">当前</span>':''} <span style="font-size:11px;color:var(--muted);">▸</span></div>
+          <div class="wrange">${w.start} ~ ${w.end} · ${cnt}条记录</div>
+        </div>
+        <div class="wactions" onclick="event.stopPropagation()">
+          ${!cur?`<button class="btn btn-s btn-sm" onclick="setCurWeek('${w.id}')">切换至此</button>`:''}
+          <button class="btn btn-d" onclick="delWeek('${w.id}')">删除</button>
+        </div>
+      </div>
+      <div class="wdetail" id="wd-${w.id}">
+        ${wcs.length?'<div class="log-list">'+detailRows+'</div>':'<div class="empty">本周暂无记录</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleDetail(id){
+  const el=document.getElementById(id);
+  el.classList.toggle('open');
+}
+
+function addWeek(){
+  const name=document.getElementById('wk-name').value.trim();
+  const start=document.getElementById('wk-start').value;
+  const end=document.getElementById('wk-end').value;
+  const yearNum=parseInt(document.getElementById('wk-yearnum').value)||0;
+  const qNum=parseInt(document.getElementById('wk-qnum').value)||0;
+  if(!name||!start||!end){toast('请填写完整');return;}
+  // 判断Q：yearNum 1-13=Q1, 14-26=Q2, 27-39=Q3, 40-52=Q4
+  const q=yearNum<=13?1:yearNum<=26?2:yearNum<=39?3:4;
+  const wk={id:uid(),name,yearNum,qNum,q,start,end};
+  D.weeks.push(wk); D.currentWid=wk.id; ghSave(D);
+  ['wk-name','wk-start','wk-end','wk-yearnum','wk-qnum'].forEach(id=>document.getElementById(id).value='');
+  renderHistory(); renderHRDRSelects(); updateSub();
+  toast(`${name} 已创建并切换`);
+}
+
+function setCurWeek(id){D.currentWid=id;ghSave(D);renderHistory();renderHRDRSelects();updateSub();toast('已切换：'+gw(id)?.name);}
+
+function delWeek(id){
+  if(!confirm('删除该周次及所有打卡记录？'))return;
+  D.weeks=D.weeks.filter(w=>w.id!==id);
+  D.checkins=D.checkins.filter(c=>c.wid!==id);
+  if(D.currentWid===id) D.currentWid=D.weeks[D.weeks.length-1]?.id||'';
+  ghSave(D); renderHistory(); updateSub(); toast('已删除');
+}
+
+init();
+</script>
+</body>
+</html>
