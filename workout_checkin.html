@@ -163,10 +163,12 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:#fafaf7;}
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">🟡 黄色 = 共同打卡对象未知，请手动选择</div>
         <div id="ai-list" style="margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <select id="ai-week-sel" style="min-width:130px;"></select>
+          <select id="ai-week-sel" style="min-width:130px;" onchange="updateWeekCount()"></select>
           <input type="date" id="ai-date" style="width:140px;">
+          <span id="week-count" style="font-size:12px;color:var(--muted);"></span>
           <button class="btn btn-p" onclick="batchImport()">录入勾选项</button>
-          <button class="btn btn-s" onclick="resetAI()">清空</button>
+          <button class="btn btn-s" onclick="resetAI()">清空识别结果</button>
+          <button class="btn btn-d" onclick="clearWeekCheckins()">清空本周录入</button>
         </div>
         <div style="font-size:12px;color:var(--muted);margin-top:6px;">日期默认今天，跨天记录可在每条里单独修改</div>
       </div>
@@ -460,6 +462,7 @@ function refreshSelects(){
   const aiWk=document.getElementById('ai-week-sel');
   if(aiWk) aiWk.innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
   if(!document.getElementById('ai-date').value) document.getElementById('ai-date').value=new Date().toISOString().slice(0,10);
+  updateWeekCount();
 }
 
 function renderLog(){
@@ -575,11 +578,44 @@ function loadImage(file){
   });
 }
 
-// 硬切5段
+// 扫描灰色空白行，找消息边界，返回切割点Y坐标数组
+// 微信群聊背景是灰色(~#EDEDED)，消息之间有一段贯穿全宽的灰色区域
 function findCutPoints(canvas, w, h){
-  const N=4;
+  // 缩小到200px宽做扫描，速度快
+  const scanW=200, scanH=Math.round(h*(200/w));
+  const sc=document.createElement('canvas');
+  sc.width=scanW; sc.height=scanH;
+  sc.getContext('2d').drawImage(canvas,0,0,w,h,0,0,scanW,scanH);
+  const pixels=sc.getContext('2d').getImageData(0,0,scanW,scanH).data;
+
+  // 判断一行是否为"灰色行"：80%像素满足 R>200 G>200 B>200 且 R≈G≈B（灰色）
+  const isGrayRow=(y)=>{
+    let gray=0;
+    for(let x=0;x<scanW;x++){
+      const i=(y*scanW+x)*4;
+      const r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+      const avg=(r+g+b)/3;
+      if(r>185&&g>185&&b>185&&Math.abs(r-avg)<20&&Math.abs(g-avg)<20&&Math.abs(b-avg)<20) gray++;
+    }
+    return gray/scanW>0.75;
+  };
+
+  // 找连续灰色行区间（>=8px），取中点作为切割点
   const cuts=[0];
-  for(let i=1;i<N;i++) cuts.push(Math.round(h*i/N));
+  let grayStart=-1;
+  const MIN_GRAY=8;
+  for(let y=0;y<scanH;y++){
+    if(isGrayRow(y)){
+      if(grayStart<0)grayStart=y;
+    }else{
+      if(grayStart>=0&&y-grayStart>=MIN_GRAY){
+        // 换算回原图坐标
+        const midY=Math.round((grayStart+(y-1))/2*(h/scanH));
+        cuts.push(midY);
+      }
+      grayStart=-1;
+    }
+  }
   cuts.push(h);
   return cuts;
 }
@@ -659,7 +695,7 @@ async function recognizeAll(files){
       for(let i=0;i<segs.length;i+=BATCH){
         const batch=segs.slice(i,i+BATCH);
         await Promise.all(batch.map(async seg=>{
-          const b64=cropToBase64(canvas,w,seg.y1,seg.y2,500);
+          const b64=cropToBase64(canvas,w,seg.y1,seg.y2,400);
           const kb=Math.round(b64.length*0.75/1024);
           progLog(`段${seg.idx+1}/${segs.length}（${seg.y1}-${seg.y2}px，${kb}KB）识别中…`,'warn');
           try{
@@ -706,14 +742,18 @@ function renderAIList(){
   document.getElementById('ai-week-sel').innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
   const today=new Date().toISOString().slice(0,10);
 
-  list.innerHTML=`<div style="display:flex;gap:8px;padding:4px 10px;font-size:11px;color:var(--muted);font-weight:500;">
-    <span style="width:15px;flex-shrink:0;"></span>
-    <span style="min-width:110px;">成员</span>
-    <span style="width:125px;">日期</span>
-    <span style="min-width:90px;">类型</span>
-    <span style="width:90px;">备注</span>
-    <span style="min-width:90px;">共同打卡</span>
-  </div>`+aiItems.map((c,i)=>{
+  // 用表格布局保证对齐
+  list.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:12px;">
+    <thead><tr style="color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);">
+      <th style="width:28px;padding:4px 6px;"></th>
+      <th style="padding:4px 6px;text-align:left;min-width:120px;">成员</th>
+      <th style="padding:4px 6px;text-align:left;width:130px;">日期</th>
+      <th style="padding:4px 6px;text-align:left;width:100px;">类型</th>
+      <th style="padding:4px 6px;text-align:left;width:100px;">备注</th>
+      <th style="padding:4px 6px;text-align:left;width:100px;">共同打卡</th>
+      <th style="width:36px;"></th>
+    </tr></thead>
+    <tbody>`+aiItems.map((c,i)=>{
     const matched=D.members.find(m=>m.nick===c.nick||c.nick.includes(m.nick)||m.nick.includes(c.nick)||m.name===c.nick);
     const mOpts=D.members.map(m=>`<option value="${m.id}" ${matched?.id===m.id?'selected':''}>${m.nick}（${m.name}）</option>`).join('');
     const jm=c.joint&&c.joint!=='unknown'?D.members.find(m=>m.nick===c.joint||c.joint.includes(m.nick)):null;
@@ -721,16 +761,16 @@ function renderAIList(){
       D.members.map(m=>`<option value="${m.id}" ${jm?.id===m.id?'selected':''}>${m.nick}</option>`).join('');
     const tOpts=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
     const isWarn=c.joint==='unknown';
-    return`<div class="ri-item ${isWarn?'warn':''}">
-      <input type="checkbox" id="chk${i}" checked>
-      <select id="ambr${i}" style="min-width:110px;">${mOpts}</select>
-      <input type="date" id="adt${i}" value="${today}" style="width:125px;">
-      <select id="atp${i}" style="min-width:90px;">${tOpts}</select>
-      <input type="text" id="ant${i}" value="${c.note||''}" placeholder="备注" style="width:90px;">
-      <select id="ajt${i}" style="min-width:90px;">${jOpts}</select>
-      ${isWarn?'<span class="warn-label">⚠ 请选择打卡伙伴</span>':''}
-    </div>`;
-  }).join('')||'<div class="empty">未识别到打卡记录</div>';
+    return`<tr style="${isWarn?'background:#fffbf0;':''}" id="ai-row-${i}">
+      <td style="padding:5px 6px;"><input type="checkbox" id="chk${i}" checked style="accent-color:var(--green);"></td>
+      <td style="padding:5px 6px;"><select id="ambr${i}" style="width:100%;">${mOpts}</select></td>
+      <td style="padding:5px 6px;"><input type="date" id="adt${i}" value="${today}" style="width:100%;"></td>
+      <td style="padding:5px 6px;"><select id="atp${i}" style="width:100%;">${tOpts}</select></td>
+      <td style="padding:5px 6px;"><input type="text" id="ant${i}" value="${c.note||''}" placeholder="备注" style="width:100%;"></td>
+      <td style="padding:5px 6px;">${isWarn?'<span class="warn-label">⚠请选择</span>':''}<select id="ajt${i}" style="width:100%;">${jOpts}</select></td>
+      <td style="padding:5px 6px;"><button class="btn btn-d" style="padding:3px 8px;font-size:11px;" onclick="removeAIItem(${i})">删</button></td>
+    </tr>`;
+  }).join('')+`</tbody></table>`||'<div class="empty">未识别到打卡记录</div>';
 
   wrap.style.display='block';
 }
@@ -762,9 +802,26 @@ function batchImport(){
   toast(`已录入 ${n} 条`);resetAI();renderHome();
 }
 
+function removeAIItem(i){aiItems.splice(i,1);renderAIList();}
+
+function updateWeekCount(){
+  const wid=document.getElementById('ai-week-sel')?.value;
+  const el=document.getElementById('week-count');
+  if(!el||!wid||!D)return;
+  const cnt=D.checkins.filter(c=>c.wid===wid).length;
+  el.textContent=`本周已录入 ${cnt} 条`;
+}
+
+function clearWeekCheckins(){
+  const wid=document.getElementById('ai-week-sel')?.value;
+  if(!wid){toast('请先选择周次');return;}
+  const cnt=D.checkins.filter(c=>c.wid===wid).length;
+  if(!confirm(`确认清空本周全部 ${cnt} 条录入记录？`))return;
+  D.checkins=D.checkins.filter(c=>c.wid!==wid);
+  ghSave(D);renderHome();renderHistory();updateWeekCount();toast('已清空');
+}
+
 function resetAI(){
-  aiItems=[];
-  document.getElementById('prog-box').style.display='none';
   document.getElementById('ai-result-wrap').style.display='none';
   document.getElementById('img-input').value='';
 }
