@@ -182,7 +182,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:#fafaf7;}
           <select id="m-type">
             <option>散步</option><option>跑步</option><option>骑行</option>
             <option>力量训练</option><option>球类运动</option><option>瑜伽/拉伸</option>
-            <option>游泳</option><option>其他</option>
+            <option>游泳</option><option>健康饮食</option><option>文娱活动</option><option>其他</option>
           </select>
         </div>
         <div class="fgrp"><label>周次</label><select id="m-week" style="min-width:120px;"></select></div>
@@ -291,7 +291,7 @@ tr:last-child td{border-bottom:none;}tr:hover td{background:#fafaf7;}
         <select id="edit-type">
           <option>散步</option><option>跑步</option><option>骑行</option>
           <option>力量训练</option><option>球类运动</option><option>瑜伽/拉伸</option>
-          <option>游泳</option><option>其他</option>
+          <option>游泳</option><option>健康饮食</option><option>文娱活动</option><option>其他</option>
         </select>
       </div>
       <div class="fgrp"><label>共同打卡伙伴</label><select id="edit-joint" style="min-width:130px;"></select></div>
@@ -539,21 +539,64 @@ async function sliceImage(file){
     img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('图片加载失败：'+file.name));};
     img.onload=()=>{
       const W=img.width,H=img.height;
-      const TARGET_W=800,SEG_H=1500,OVERLAP=80;
-      const segs=[];
-      let y=0,idx=0;
-      while(y<H){
-        const bot=Math.min(y+SEG_H,H);
-        const canvas=document.createElement('canvas');
-        const ratio=TARGET_W/W;
-        canvas.width=TARGET_W;
-        canvas.height=Math.round((bot-y)*ratio);
-        const ctx=canvas.getContext('2d');
-        ctx.drawImage(img,0,y,W,bot-y,0,0,canvas.width,canvas.height);
-        segs.push({b64:canvas.toDataURL('image/jpeg',0.88).split(',')[1],idx,yStart:y,yEnd:bot});
-        y=bot-OVERLAP;idx++;
-        if(bot>=H)break;
+
+      // 等比缩小用于扫描空白带（宽度不超过400px）
+      const scanRatio=Math.min(1,400/W);
+      const scanW=Math.round(W*scanRatio),scanH=Math.round(H*scanRatio);
+      const scanCanvas=document.createElement('canvas');
+      scanCanvas.width=scanW;scanCanvas.height=scanH;
+      const scanCtx=scanCanvas.getContext('2d');
+      scanCtx.drawImage(img,0,0,scanW,scanH);
+      const pixels=scanCtx.getImageData(0,0,scanW,scanH).data;
+
+      // 扫描每一行，判断是否为空白行（80%以上像素RGB>235）
+      const isWhiteRow=(y)=>{
+        let white=0;
+        for(let x=0;x<scanW;x++){
+          const i=(y*scanW+x)*4;
+          if(pixels[i]>235&&pixels[i+1]>235&&pixels[i+2]>235)white++;
+        }
+        return white/scanW>0.8;
+      };
+
+      // 找所有空白带（连续白行>=15px）的中心位置（换算回原图坐标）
+      const cuts=[0];
+      let whiteStart=-1;
+      const MIN_WHITE=Math.round(15*scanRatio)||5;
+      const MAX_SEG=Math.round(2000*scanRatio);
+      for(let y=0;y<scanH;y++){
+        if(isWhiteRow(y)){
+          if(whiteStart<0)whiteStart=y;
+        }else{
+          if(whiteStart>=0&&y-whiteStart>=MIN_WHITE){
+            const midY=Math.round((whiteStart+(y-1))/2/scanRatio);
+            // 如果上一个切点到这里超过MAX_SEG，强制加一个切点
+            const lastCut=cuts[cuts.length-1];
+            if(Math.round(midY*scanRatio)-Math.round(lastCut*scanRatio)>MAX_SEG){
+              cuts.push(Math.round((lastCut+midY)/2));
+            }
+            cuts.push(midY);
+          }
+          whiteStart=-1;
+        }
       }
+      cuts.push(H);
+
+      // 按切点从原图裁切每段
+      const TARGET_W=Math.min(W,800);
+      const ratio=TARGET_W/W;
+      const segs=[];
+      for(let i=0;i<cuts.length-1;i++){
+        const y1=cuts[i],y2=cuts[i+1];
+        if(y2-y1<10)continue;
+        const segH=Math.round((y2-y1)*ratio);
+        if(segH<5)continue;
+        const c=document.createElement('canvas');
+        c.width=TARGET_W;c.height=segH;
+        c.getContext('2d').drawImage(img,0,y1,W,y2-y1,0,0,TARGET_W,segH);
+        segs.push({b64:c.toDataURL('image/jpeg',0.88).split(',')[1],idx:i,yStart:y1,yEnd:y2});
+      }
+
       URL.revokeObjectURL(url);
       resolve(segs);
     };
@@ -572,7 +615,7 @@ function updateProgRow(idx,status,msg){
 }
 
 async function recognizeSegment(seg,names,fileIdx,totalSegs){
-  const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'];
+  const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'];
   updateProgRow(`${fileIdx}-${seg.idx}`,'proc','');
   const akey=getAKey();
   if(!akey){updateProgRow(`${fileIdx}-${seg.idx}`,'err','未配置 API Key');return{idx:seg.idx,fileIdx,items:[]};}
@@ -591,7 +634,7 @@ async function recognizeSegment(seg,names,fileIdx,totalSegs){
 1. 只识别发了图片的消息，忽略纯文字
 2. 每条消息左侧有昵称，优先匹配成员列表
 3. 图片里有两个人数据或文字提到邀请谁，joint填对方昵称；提到共同打卡但没说是谁，joint填"unknown"
-4. 步数/健康APP步数/手表步数→散步；跑步配速/跑步路线→跑步；骑行路线→骑行
+4. 步数/健康APP步数/手表步数→散步；跑步配速/跑步路线→跑步；骑行路线→骑行；卡路里/饮食记录→健康饮食；观展/出游/聚会→文娱活动
 5. 保持识别顺序和截图从上到下一致
 6. 仅返回JSON：{"checkins":[{"nick":"昵称","type":"运动类型","note":"简短备注","joint":"对方昵称或unknown或空"}]}`}
         ]}]
@@ -643,7 +686,7 @@ async function recognizeAll(files){
         allSegs.push({...s,fileIdx:fi});
         progList.innerHTML+=`<div class="prog-row" id="prog-row-${fi}-${s.idx}">
           <span class="prog-badge wait">等待中</span>
-          <span class="prog-info" style="color:var(--muted);font-size:12px;">第${fi+1}张截图 第${s.idx+1}段（第${s.yStart}~${s.yEnd}行）</span>
+          <span class="prog-info" style="color:var(--muted);font-size:12px;">第${fi+1}张截图 第${s.idx+1}段</span>
         </div>`;
       });
     }catch(e){
@@ -698,13 +741,20 @@ function renderAIList(){
   document.getElementById('ai-week-sel').innerHTML=D.weeks.map(w=>`<option value="${w.id}" ${w.id===D.currentWid?'selected':''}>${w.name}</option>`).join('');
   const today=new Date().toISOString().slice(0,10);
 
-  list.innerHTML=aiItems.map((c,i)=>{
+  list.innerHTML=`<div style="display:flex;gap:8px;padding:4px 10px;font-size:11px;color:var(--muted);font-weight:500;">
+    <span style="width:15px;flex-shrink:0;"></span>
+    <span style="min-width:110px;">成员</span>
+    <span style="width:125px;">日期</span>
+    <span style="min-width:90px;">类型</span>
+    <span style="width:90px;">备注</span>
+    <span style="min-width:90px;">共同打卡</span>
+  </div>`+aiItems.map((c,i)=>{
     const matched=D.members.find(m=>m.nick===c.nick||c.nick.includes(m.nick)||m.nick.includes(c.nick)||m.name===c.nick);
     const mOpts=D.members.map(m=>`<option value="${m.id}" ${matched?.id===m.id?'selected':''}>${m.nick}（${m.name}）</option>`).join('');
     const jm=c.joint&&c.joint!=='unknown'?D.members.find(m=>m.nick===c.joint||c.joint.includes(m.nick)):null;
     const jOpts='<option value="">无</option><option value="unknown" '+(c.joint==='unknown'?'selected':'')+'>不知道是谁⚠</option>'+
       D.members.map(m=>`<option value="${m.id}" ${jm?.id===m.id?'selected':''}>${m.nick}</option>`).join('');
-    const tOpts=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','其他'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
+    const tOpts=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'].map(t=>`<option ${t===c.type?'selected':''}>${t}</option>`).join('');
     const isWarn=c.joint==='unknown';
     return`<div class="ri-item ${isWarn?'warn':''}">
       <input type="checkbox" id="chk${i}" checked>
@@ -755,12 +805,29 @@ function resetAI(){
 }
 
 // ══ Di币 ══
-function calcWeekDi(mid,wid){return D.checkins.filter(c=>c.mid===mid&&c.wid===wid).length;}
+// 去重：同人同天同类型只算1次；有joint的算2次（翻倍，封顶2倍）
+function dedupCheckins(checkins){
+  const seen=new Set();
+  const result=[];
+  for(const c of checkins){
+    const key=`${c.mid}_${c.date}_${c.type}`;
+    if(!seen.has(key)){seen.add(key);result.push(c);}
+  }
+  return result;
+}
+function calcWeekDi(mid,wid){
+  const cs=dedupCheckins(D.checkins.filter(c=>c.mid===mid&&c.wid===wid));
+  return cs.reduce((sum,c)=>sum+(c.joint?2:1),0);
+}
 function calcQ2Di(mid){
   const q2wids=D.weeks.filter(w=>w.q===2).map(w=>w.id);
-  return D.checkins.filter(c=>c.mid===mid&&q2wids.includes(c.wid)).length;
+  const cs=dedupCheckins(D.checkins.filter(c=>c.mid===mid&&q2wids.includes(c.wid)));
+  return cs.reduce((sum,c)=>sum+(c.joint?2:1),0);
 }
-function calcYearDi(mid){return(gm(mid)?.diBase||0)+D.checkins.filter(c=>c.mid===mid).length;}
+function calcYearDi(mid){
+  const cs=dedupCheckins(D.checkins.filter(c=>c.mid===mid));
+  return (gm(mid)?.diBase||0)+cs.reduce((sum,c)=>sum+(c.joint?2:1),0);
+}
 function calcInvest(mid){
   // 分子：Q2中有打卡记录的周数；分母：Q2已创建的周次数量（到当前为止）
   const q2wks=D.weeks.filter(w=>w.q===2);
