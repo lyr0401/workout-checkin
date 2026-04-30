@@ -526,7 +526,7 @@ function saveEdit(){
   ghSave(D);closeEditModal();renderHome();renderHistory();toast('已保存');
 }
 
-// ══ AI 识别（三步：定位→切图→识别→Review）══
+// ══ AI 识别（压缩整图→单次调用）══
 let aiItems=[];
 
 function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag');onFiles(e.dataTransfer.files);}
@@ -541,8 +541,8 @@ function progLog(msg,type='info'){
 }
 function progTitle(msg){document.getElementById('prog-title').textContent=msg;}
 
-// 调用AI接口（通用）
-async function callAI(messages,maxTokens=2000){
+// 调用AI接口
+async function callAI(messages, maxTokens=2500){
   const akey=getAKey();
   if(!akey)throw new Error('未配置 API Key');
   const resp=await fetch('https://api.gptsapi.net/v1/chat/completions',{
@@ -558,216 +558,94 @@ async function callAI(messages,maxTokens=2000){
   return j.choices?.[0]?.message?.content||'';
 }
 
-// 图片转base64（可缩放）
-function imgToBase64(img,srcCanvas,x,y,w,h,targetW,quality=0.88){
-  const targetH=Math.round(h*(targetW/w));
-  const c=document.createElement('canvas');
-  c.width=targetW;c.height=targetH;
-  c.getContext('2d').drawImage(srcCanvas||img,x,y,w,h,0,0,targetW,targetH);
-  return c.toDataURL('image/jpeg',quality).split(',')[1];
-}
-
-// 加载图片到canvas
-function loadImageToCanvas(file){
+// 压缩图片到目标宽度，返回base64
+function compressImage(file, targetW=800){
   return new Promise((resolve,reject)=>{
     const img=new Image();
     const url=URL.createObjectURL(file);
     img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('图片加载失败'));};
     img.onload=()=>{
+      const W=img.width, H=img.height;
+      const scale=Math.min(1, targetW/W);
+      const cW=Math.round(W*scale), cH=Math.round(H*scale);
       const c=document.createElement('canvas');
-      c.width=img.width;c.height=img.height;
-      c.getContext('2d').drawImage(img,0,0);
+      c.width=cW; c.height=cH;
+      c.getContext('2d').drawImage(img,0,0,cW,cH);
       URL.revokeObjectURL(url);
-      resolve({canvas:c,w:img.width,h:img.height});
+      const b64=c.toDataURL('image/jpeg',0.88).split(',')[1];
+      progLog(`压缩完成：${W}×${H} → ${cW}×${cH}，约${Math.round(b64.length*0.75/1024)}KB`,'ok');
+      resolve(b64);
     };
     img.src=url;
   });
 }
 
-// 步骤1：压缩整图，让AI定位所有昵称行的Y坐标（百分比）
-async function stepLocate(canvas,w,h,names){
-  // 压缩到宽度600px用于定位，节省token
-  const b64=imgToBase64(null,canvas,0,0,w,h,600,0.82);
-  const prompt=`这是一张微信群聊天记录长截图（已压缩）。
-群成员昵称列表：${names}
-任务：从上到下找出所有消息的发送者昵称行，每条消息顶部都有昵称。
-注意：同一个人可能连续发多条消息，每条都有昵称行，请全部列出（不要合并）。
-返回JSON格式（仅JSON，不要其他文字）：
-{"messages":[{"nick":"昵称","y":Y坐标百分比0-100的数字}]}
-Y坐标是该昵称行在图片中从顶部的位置百分比。`;
-  const raw=await callAI([{role:'user',content:[
-    {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}},
-    {type:'text',text:prompt}
-  ]}],1500);
-  try{
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    return parsed.messages||[];
-  }catch(e){
-    throw new Error('定位步骤解析失败：'+raw.slice(0,80));
-  }
-}
-
-// 步骤2：按昵称位置切图，同一人连续消息合并为一块
-function stepSlice(canvas,w,h,messages){
-  if(!messages.length)return[];
-  // 将y百分比换算为像素，每块从当前y到下一个y
-  const blocks=[];
-  for(let i=0;i<messages.length;i++){
-    const y1=Math.round(messages[i].y/100*h);
-    const y2=i+1<messages.length?Math.round(messages[i+1].y/100*h):h;
-    const blockH=y2-y1;
-    if(blockH<10)continue;
-    // 检查是否和上一块同一昵称→合并
-    const last=blocks[blocks.length-1];
-    if(last&&last.nick===messages[i].nick){
-      last.yEnd=y2;// 扩展上一块到本块结束
-    }else{
-      blocks.push({nick:messages[i].nick,yStart:y1,yEnd:y2,idx:blocks.length});
-    }
-  }
-  // 切图：每块宽度保持原图，高度按块，目标宽800px
-  const TARGET_W=Math.min(w,800);
-  return blocks.map(b=>{
-    const bH=b.yEnd-b.yStart;
-    const b64=imgToBase64(null,canvas,0,b.yStart,w,bH,TARGET_W,0.90);
-    return{...b,b64};
-  });
-}
-
-// 步骤3：并发识别每个块的打卡内容
-async function stepRecognize(blocks,names){
-  const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'];
-  const prompt=(nick)=>`这是微信群聊天截图中"${nick}"发送的一条或多条消息（可能包含图片和文字）。
-群成员：${names}
-运动类型：${TYPES.join('、')}
-
-识别规则：
-1. 这段截图属于同一个人"${nick}"，可能有多条消息（图片+文字说明）
-2. 图片内容和紧随其后的文字说明属于同一次打卡
-3. 步数截图/健康APP→散步；跑步路线/配速→跑步；骑行路线→骑行；力量训练截图→力量训练
-4. 如果文字提到"和xxx一起"或"联合xxx"或图片含两人数据→joint填对方昵称；提到一起但没说是谁→joint填"unknown"
-5. 如果这段内容不是打卡（普通聊天）→返回空数组
-6. note填简短备注（步数/距离/活动内容等），不超过15字
-7. 日期：如果图片中能看到日期则填写（格式MM-DD），否则填null
-
-仅返回JSON：{"checkins":[{"nick":"${nick}","type":"运动类型","date":"MM-DD或null","note":"备注","joint":"对方昵称或unknown或空字符串"}]}`;
-
-  const results=[];
-  // 并发，每批4个
-  const BATCH=4;
-  for(let i=0;i<blocks.length;i+=BATCH){
-    const batch=blocks.slice(i,i+BATCH);
-    const batchRes=await Promise.all(batch.map(async b=>{
-      progLog(`识别块 ${b.idx+1}/${blocks.length}：${b.nick}…`,'warn');
-      try{
-        const raw=await callAI([{role:'user',content:[
-          {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b.b64}`}},
-          {type:'text',text:prompt(b.nick)}
-        ]}],800);
-        const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-        const items=parsed.checkins||[];
-        progLog(`块 ${b.idx+1} "${b.nick}"：找到 ${items.length} 条`,'ok');
-        return{idx:b.idx,nick:b.nick,items};
-      }catch(e){
-        progLog(`块 ${b.idx+1} "${b.nick}" 出错：${e.message.slice(0,50)}`,'err');
-        return{idx:b.idx,nick:b.nick,items:[]};
-      }
-    }));
-    results.push(...batchRes);
-  }
-  results.sort((a,b)=>a.idx-b.idx);
-  return results.flatMap(r=>r.items);
-}
-
-// 步骤4：Review——让AI对所有识别结果做一次整体校验
-async function stepReview(rawItems,names){
-  if(!rawItems.length)return rawItems;
-  const prompt=`以下是按顺序从微信群打卡截图中识别出的打卡记录（JSON数组）：
-${JSON.stringify(rawItems,null,2)}
-
-群成员：${names}
-
-请做以下检查和修正：
-1. joint字段：如果某人提到"联合"或"一起"，检查joint是否正确填写了对方昵称（从成员列表匹配）
-2. 去重：如果同一人同一天同一类型出现多次（可能是图片+文字被分别识别了），合并为一条，保留note最丰富的那条
-3. 如有明显识别错误（类型不对、昵称不对）请修正
-4. date字段：格式统一为MM-DD或null
-
-仅返回修正后的JSON数组（不要其他文字）：[{"nick":"...","type":"...","date":"...","note":"...","joint":"..."}]`;
-
-  try{
-    const raw=await callAI([{role:'user',content:[{type:'text',text:prompt}]}],2000);
-    const parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
-    return Array.isArray(parsed)?parsed:rawItems;
-  }catch(e){
-    progLog('Review步骤出错，使用原始结果：'+e.message.slice(0,50),'warn');
-    return rawItems;
-  }
-}
-
 async function recognizeAll(files){
   if(!D||!D.members){toast('数据未加载，请稍后再试');return;}
   const progBox=document.getElementById('prog-box');
-  const progList=document.getElementById('prog-list');
   const progSummary=document.getElementById('prog-summary');
   const wrap=document.getElementById('ai-result-wrap');
 
   progBox.style.display='block';
   wrap.style.display='none';
   progSummary.style.display='none';
-  progList.innerHTML='';
+  document.getElementById('prog-list').innerHTML='';
   aiItems=[];
 
+  const TYPES=['散步','跑步','骑行','力量训练','球类运动','瑜伽/拉伸','游泳','健康饮食','文娱活动','其他'];
   const names=D.members.map(m=>`${m.nick}（${m.name}）`).join('、');
-  let allRawItems=[];
+  const prompt=`这是一张微信健身打卡群的聊天记录长截图。
+群成员列表（昵称→姓名）：${names}
+
+请从上到下识别所有打卡消息，返回JSON。规则：
+1. 每条消息顶部有昵称，优先匹配成员列表中的昵称
+2. 同一人连续发的图片+文字说明，属于同一次打卡，合并为一条记录
+3. 运动类型只能从以下选择：${TYPES.join('、')}
+4. 判断类型：步数截图/健康APP/手表步数→散步；跑步路线/配速→跑步；骑行路线→骑行；力量训练→力量训练；出游/观展/聚会/亲子活动→文娱活动；饮食记录→健康饮食
+5. 散步需注意：把图中步数写入note（如"8385步"），管理员判断是否达标
+6. 日期：从图片中读取（格式MM-DD），读不到填null
+7. 共同打卡：文字提到"和xxx一起"/"联合xxx"，或图片含两人数据→joint填对方昵称（匹配成员列表）；提到一起但没说是谁→joint填"unknown"
+8. 纯聊天消息（非打卡）忽略不记录
+9. note简短（≤15字），记录关键信息（步数/距离/活动内容）
+
+仅返回JSON，不要其他文字：
+{"checkins":[{"nick":"昵称","type":"运动类型","date":"MM-DD或null","note":"备注","joint":"对方昵称或unknown或空字符串"}]}`;
+
+  let allItems=[];
 
   for(let fi=0;fi<files.length;fi++){
-    const fileLabel=files.length>1?`第${fi+1}张截图`:'截图';
+    const label=files.length>1?`第${fi+1}张`:' ';
     try{
-      // 步骤1：加载图片
-      progTitle(`${fileLabel}：加载图片…`);
-      progLog(`${fileLabel}：开始加载`);
-      const {canvas,w,h}=await loadImageToCanvas(files[fi]);
-      progLog(`${fileLabel}：${w}×${h}px，加载完成`,'ok');
+      progTitle(`${label}压缩图片中…`);
+      progLog(`${label}开始处理，原始大小约${Math.round(files[fi].size/1024)}KB`);
+      const b64=await compressImage(files[fi], 800);
 
-      // 步骤2：AI定位昵称
-      progTitle(`${fileLabel}：AI定位消息块…`);
-      progLog(`${fileLabel}：第1步——AI定位昵称行…`,'warn');
-      const messages=await stepLocate(canvas,w,h,names);
-      progLog(`${fileLabel}：定位到 ${messages.length} 条消息`,'ok');
-      if(!messages.length){progLog(`${fileLabel}：未找到消息，跳过`,'err');continue;}
+      progTitle(`${label}AI识别中…`);
+      progLog(`${label}发送给AI识别…`,'warn');
 
-      // 步骤3：切图
-      progTitle(`${fileLabel}：切图中…`);
-      const blocks=stepSlice(canvas,w,h,messages);
-      progLog(`${fileLabel}：合并后共 ${blocks.length} 个消息块`,'ok');
+      const raw=await callAI([{role:'user',content:[
+        {type:'image_url',image_url:{url:`data:image/jpeg;base64,${b64}`}},
+        {type:'text',text:prompt}
+      ]}], 2500);
 
-      // 步骤4：并发识别每块
-      progTitle(`${fileLabel}：识别各消息块…`);
-      const rawItems=await stepRecognize(blocks,names);
-      progLog(`${fileLabel}：原始识别 ${rawItems.length} 条`,'ok');
-      allRawItems.push(...rawItems);
-
+      let parsed;
+      try{
+        parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());
+      }catch(e){
+        throw new Error(`AI返回格式异常：${raw.slice(0,60)}`);
+      }
+      const items=parsed.checkins||[];
+      progLog(`${label}识别完成，找到 ${items.length} 条打卡记录`,'ok');
+      allItems.push(...items);
     }catch(e){
-      progLog(`${fileLabel} 处理失败：${e.message.slice(0,60)}`,'err');
+      progLog(`${label}失败：${e.message.slice(0,80)}`,'err');
     }
   }
 
-  if(!allRawItems.length){
-    progTitle('未识别到任何打卡记录');
-    return;
-  }
-
-  // 步骤5：全局Review
-  progTitle('AI整体校验中…');
-  progLog('最后一步：AI整体校验和去重…','warn');
-  const reviewed=await stepReview(allRawItems,names);
-  progLog(`校验完成，最终 ${reviewed.length} 条`,'ok');
-
-  aiItems=reviewed;
-  progTitle('识别完成');
+  aiItems=allItems;
+  progTitle(`识别完成，共 ${aiItems.length} 条`);
   progSummary.style.display='block';
-  progSummary.textContent=`共识别 ${aiItems.length} 条打卡记录。请对照截图核对后录入。`;
+  progSummary.textContent=`共识别 ${aiItems.length} 条打卡记录，来自 ${files.length} 张截图。请对照截图核对后录入。`;
   renderAIList();
 }
 
