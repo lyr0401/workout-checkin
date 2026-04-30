@@ -577,7 +577,7 @@ function loadImage(file){
 
 // 硬切5段
 function findCutPoints(canvas, w, h){
-  const N=5;
+  const N=4;
   const cuts=[0];
   for(let i=1;i<N;i++) cuts.push(Math.round(h*i/N));
   cuts.push(h);
@@ -659,7 +659,7 @@ async function recognizeAll(files){
       for(let i=0;i<segs.length;i+=BATCH){
         const batch=segs.slice(i,i+BATCH);
         await Promise.all(batch.map(async seg=>{
-          const b64=cropToBase64(canvas,w,seg.y1,seg.y2,400);
+          const b64=cropToBase64(canvas,w,seg.y1,seg.y2,500);
           const kb=Math.round(b64.length*0.75/1024);
           progLog(`段${seg.idx+1}/${segs.length}（${seg.y1}-${seg.y2}px，${kb}KB）识别中…`,'warn');
           try{
